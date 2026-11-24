@@ -36,12 +36,20 @@ function randomShuffle(array) {
 
 exports.createGame = onCall(async (request) => {
   const uid = requireAuth(request);
-  const maxPlayers = Number(request.data?.maxPlayers);
+  const seerCount = Number(request.data?.seerCount);
+  const werewolfCount = Number(request.data?.werewolfCount);
+  const villagerCount = Number(request.data?.villagerCount);
+  const maxPlayers = seerCount + werewolfCount + villagerCount;
   const secretWord = typeof request.data?.secretWord === "string"
     ? request.data.secretWord.trim() : "";
 
-  if (!Number.isInteger(maxPlayers) || maxPlayers < 4 || maxPlayers > 30) {
-    throw new HttpsError("invalid-argument", "Choose between 4 and 30 players.");
+  const roleCounts = [seerCount, werewolfCount, villagerCount];
+  if (!roleCounts.every(Number.isInteger) || roleCounts.some(count => count < 0) ||
+      werewolfCount < 1 || maxPlayers < 4 || maxPlayers > 30) {
+    throw new HttpsError("invalid-argument", "Choose at least 1 Werewolf and a total of 4–30 players. Seers and Villagers can be 0 or more.");
+  }
+  if (Number(request.data?.maxPlayers) !== maxPlayers) {
+    throw new HttpsError("invalid-argument", "Player total does not match the selected role counts.");
   }
   if (!secretWord || secretWord.length > 80) {
     throw new HttpsError("invalid-argument", "Secret word must be 1–80 characters.");
@@ -53,6 +61,9 @@ exports.createGame = onCall(async (request) => {
   batch.set(ref, {
     hostUid: uid,
     maxPlayers,
+    seerCount,
+    werewolfCount,
+    villagerCount,
     playerCount: 0,
     status: "waiting",
     createdAt: FieldValue.serverTimestamp()
@@ -119,10 +130,9 @@ exports.startGame = onCall(async (request) => {
 
     const roster = rosterSnap.docs;
     const roles = randomShuffle([
-      "Seer",
-      "Werewolf",
-      "Werewolf",
-      ...Array(game.maxPlayers - 3).fill("Villager")
+      ...Array(game.seerCount).fill("Seer"),
+      ...Array(game.werewolfCount).fill("Werewolf"),
+      ...Array(game.villagerCount).fill("Villager")
     ]);
 
     roster.forEach((playerDoc, index) => {

@@ -23,12 +23,27 @@
     <section id="home" class="panel hidden">
       <h2>Welcome, Mayor</h2>
       <p class="muted">Create a game, choose the secret word, and share the QR code.</p>
-      <label for="playerCount">Number of players (not including the Mayor)</label>
-      <input id="playerCount" type="number" min="4" max="30" value="8">
+      <h3>Choose the roles</h3>
+      <p class="small muted">The Mayor is not included. Total players are calculated from these role counts.</p>
+      <div class="role-count-grid">
+        <div>
+          <label for="seerCount">Seers</label>
+          <input id="seerCount" type="number" min="0" max="30" value="1">
+        </div>
+        <div>
+          <label for="werewolfCount">Werewolves</label>
+          <input id="werewolfCount" type="number" min="1" max="30" value="2">
+        </div>
+        <div>
+          <label for="villagerCount">Villagers</label>
+          <input id="villagerCount" type="number" min="0" max="30" value="5">
+        </div>
+      </div>
+      <p class="role-total">Total players: <strong id="roleTotal">8</strong></p>
       <label for="secretWord">Secret magic word</label>
       <input id="secretWord" type="password" maxlength="80" placeholder="Only the Mayor should know">
       <button id="createGameBtn">Create game</button>
-      <p class="small muted">Each game gets one Seer, two Werewolves, and Villagers for everyone else.</p>
+      <p class="small muted">Firebase will randomly assign exactly the role counts you select.</p>
     </section>
 
     <section id="join" class="panel hidden">
@@ -49,6 +64,8 @@
         <input id="gameLink" readonly aria-label="Game link">
         <button id="copyLinkBtn" class="secondary">Copy</button>
       </div>
+      <h3>Role distribution</h3>
+      <p id="hostRoleCounts" class="muted">1 Seer · 2 Werewolves · 5 Villagers</p>
       <h3>Players <span id="playerTally" class="pill">0/8</span></h3>
       <ol id="roster" class="roster"></ol>
       <button id="startGameBtn" disabled>Start game and assign roles</button>

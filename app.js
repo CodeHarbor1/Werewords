@@ -1,12 +1,15 @@
-// 1) Replace this object with the Firebase web app config from Firebase Console.
+// Firebase web app configuration for werewords-349d4.
 const firebaseConfig = {
-  apiKey: "PASTE_API_KEY_HERE",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  appId: "PASTE_APP_ID_HERE"
+  apiKey: "AIzaSyARhmPQ5H6rLAAG-h4QRMVrUJ6BoeOI3fM",
+  authDomain: "werewords-349d4.firebaseapp.com",
+  projectId: "werewords-349d4",
+  storageBucket: "werewords-349d4.firebasestorage.app",
+  messagingSenderId: "487978125953",
+  appId: "1:487978125953:web:7962f8641c58975eb25b80",
+  measurementId: "G-88124QX62X"
 };
 
-// 2) Keep this region the same as the region used when deploying Functions.
+// Keep this region the same as the region used when deploying Functions.
 const FUNCTION_REGION = "us-west1";
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
@@ -80,11 +83,32 @@ function routeFromUrl() {
   }
 }
 
+function selectedRoleCounts() {
+  return {
+    seerCount: Number($("seerCount").value),
+    werewolfCount: Number($("werewolfCount").value),
+    villagerCount: Number($("villagerCount").value)
+  };
+}
+
+function updateRoleTotal() {
+  const { seerCount, werewolfCount, villagerCount } = selectedRoleCounts();
+  const values = [seerCount, werewolfCount, villagerCount];
+  const valid = values.every(Number.isInteger) && values.every(value => value >= 0);
+  const total = valid ? seerCount + werewolfCount + villagerCount : 0;
+  $("roleTotal").textContent = String(total);
+  $("createGameBtn").disabled = !valid || werewolfCount < 1 || total < 4 || total > 30;
+}
+
 async function createGame() {
-  const maxPlayers = Number($("playerCount").value);
+  const roleCounts = selectedRoleCounts();
+  const { seerCount, werewolfCount, villagerCount } = roleCounts;
+  const maxPlayers = seerCount + werewolfCount + villagerCount;
   const secretWord = $("secretWord").value.trim();
-  if (!Number.isInteger(maxPlayers) || maxPlayers < 4 || maxPlayers > 30) {
-    alert("Choose between 4 and 30 players.");
+  if (![seerCount, werewolfCount, villagerCount].every(Number.isInteger) ||
+      [seerCount, werewolfCount, villagerCount].some(value => value < 0) ||
+      werewolfCount < 1 || maxPlayers < 4 || maxPlayers > 30) {
+    alert("Choose at least 1 Werewolf and a total of 4–30 players. Seers and Villagers can be 0 or more.");
     return;
   }
   if (!secretWord) {
@@ -93,7 +117,7 @@ async function createGame() {
   }
   $("createGameBtn").disabled = true;
   try {
-    const result = await callable("createGame", { maxPlayers, secretWord });
+    const result = await callable("createGame", { maxPlayers, ...roleCounts, secretWord });
     gameId = result.data.gameId;
     isHost = true;
     history.replaceState({}, "", `${location.pathname}?game=${encodeURIComponent(gameId)}`);
@@ -101,7 +125,7 @@ async function createGame() {
   } catch (error) {
     showError(explainError(error));
   } finally {
-    $("createGameBtn").disabled = false;
+    updateRoleTotal();
   }
 }
 
@@ -150,6 +174,7 @@ function watchGameAndRoster() {
     }
     const game = snap.data();
     $("playerTally").textContent = `${game.playerCount || 0}/${game.maxPlayers}`;
+    $("hostRoleCounts").textContent = `${game.seerCount} Seer${game.seerCount === 1 ? "" : "s"} · ${game.werewolfCount} Werewolf${game.werewolfCount === 1 ? "" : "s"} · ${game.villagerCount} Villager${game.villagerCount === 1 ? "" : "s"}`;
     $("hostStatus").textContent = game.status === "started" ? "Game started. Roles have been assigned." : "Waiting for players to join…";
     $("startGameBtn").disabled = game.status !== "waiting" || (game.playerCount || 0) !== game.maxPlayers;
     if (game.status === "started") {
@@ -225,6 +250,11 @@ async function startGame() {
     $("startGameBtn").disabled = false;
   }
 }
+
+["seerCount", "werewolfCount", "villagerCount"].forEach(id => {
+  $(id).addEventListener("input", updateRoleTotal);
+});
+updateRoleTotal();
 
 $("createGameBtn").addEventListener("click", createGame);
 $("joinGameBtn").addEventListener("click", joinGame);

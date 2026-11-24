@@ -9,7 +9,7 @@ This project uses GitHub Pages for the website and Firebase Authentication, Fire
 - Players sign in anonymously and join with a display name.
 - The Mayor sees the lobby update live.
 - When the exact player count has joined, the Mayor starts the game.
-- A server-side Cloud Function randomly assigns 1 Seer, 2 Werewolves, and the rest Villagers.
+- The Mayor selects the number of Seers, Werewolves, and Villagers. The server-side Cloud Function randomly assigns exactly those counts. The Mayor is not included in the player total.
 - Seers and Werewolves receive the secret word. Villagers do not.
 - A player can read only their own private role document. The Mayor can retrieve the secret word through a host-only callable function.
 
@@ -23,7 +23,7 @@ The Mayor is a moderator and is not counted among the player slots in this start
 4. In **Build → Firestore Database**, create a database.
 5. Choose a region. This starter uses `us-west1`; change `FUNCTION_REGION` in `app.js` and `setGlobalOptions` in `functions/index.js` together if you choose another region.
 6. Add your GitHub Pages domain to Authentication → Settings → Authorized domains. For example, add `yourusername.github.io` (do not include `https://` or a path).
-7. Replace the placeholder `firebaseConfig` object at the top of `app.js` with your Firebase web app config.
+7. The Firebase web app configuration is already filled in at the top of `app.js` for project `werewords-349d4`. If you use a different Firebase project, replace it with that project’s web app config.
 
 ## B. Deploy Firestore rules and Cloud Functions
 
@@ -37,7 +37,7 @@ firebase login
 
 In this project folder:
 ```bash
-firebase use --add
+firebase use werewords-349d4
 ```
 Select your Firebase project and make it the default. This creates `.firebaserc`.
 
