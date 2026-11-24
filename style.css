@@ -1,0 +1,41 @@
+* { box-sizing: border-box; }
+:root { color-scheme: dark; }
+body {
+  margin: 0; min-height: 100vh; padding: 24px 14px;
+  background: radial-gradient(circle at top, #30364b 0, #171923 55%);
+  color: #f7fafc; font-family: Arial, Helvetica, sans-serif;
+}
+.shell { width: 100%; max-width: 620px; margin: 0 auto; }
+header { text-align: center; margin: 14px 0 24px; }
+h1 { color: #f6c85f; font-size: clamp(2.4rem, 8vw, 3.6rem); margin: 6px 0; }
+h2 { margin-top: 0; color: #f6c85f; }
+h3 { margin-bottom: 10px; }
+.eyebrow { text-transform: uppercase; letter-spacing: .16em; font-size: .72rem; color: #aab3c5; }
+.muted { color: #b9c2d2; line-height: 1.5; }
+.small { font-size: .85rem; line-height: 1.45; }
+.panel { background: #252a3a; border: 1px solid #3a4258; border-radius: 18px; padding: 24px; box-shadow: 0 16px 45px #0004; }
+.hidden { display: none !important; }
+label { display: block; margin: 18px 0 7px; font-size: .9rem; color: #d9deea; }
+input {
+  width: 100%; border: 1px solid #59647d; border-radius: 10px; padding: 13px 14px;
+  background: #171c29; color: white; font-size: 1rem; min-width: 0;
+}
+button {
+  width: 100%; border: 0; border-radius: 10px; padding: 14px 16px; margin-top: 16px;
+  background: #f6c85f; color: #171923; font-size: 1rem; font-weight: 700; cursor: pointer;
+}
+button:disabled { opacity: .45; cursor: not-allowed; }
+button.secondary { background: #596579; color: white; }
+.pill { display: inline-block; padding: 5px 10px; border-radius: 999px; background: #3b465f; color: #dce5f7; font-size: .8rem; }
+.qr { display: flex; justify-content: center; margin: 18px auto; min-height: 170px; }
+.qr img, .qr canvas { border: 10px solid white; border-radius: 8px; }
+.copyrow { display: flex; gap: 8px; }
+.copyrow button { width: auto; margin: 0; white-space: nowrap; }
+.roster { padding-left: 24px; }
+.roster li { padding: 10px 12px; margin: 7px 0; background: #343b4f; border-radius: 8px; }
+.secretbox { background: #17251f; border: 1px solid #47765c; padding: 18px; border-radius: 12px; margin-top: 18px; text-align: center; }
+.word { font-size: clamp(1.8rem, 7vw, 2.6rem); color: #a7f3c0; font-weight: 800; margin: 12px 0 4px; overflow-wrap: anywhere; }
+#roleTitle { font-size: 2rem; }
+.spinner { width: 28px; height: 28px; border: 3px solid #566078; border-top-color: #f6c85f; border-radius: 50%; margin: 24px auto 4px; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+footer { text-align: center; color: #7f899e; font-size: .78rem; padding: 22px 0; }

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171923">
+  <title>Werewords</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="eyebrow">A social deduction game</div>
+      <h1>Werewords</h1>
+      <p class="muted">One game. Everyone joins on their own phone.</p>
+    </header>
+
+    <section id="loading" class="panel">
+      <p>Connecting to the game…</p>
+    </section>
+
+    <section id="home" class="panel hidden">
+      <h2>Welcome, Mayor</h2>
+      <p class="muted">Create a game, choose the secret word, and share the QR code.</p>
+      <label for="playerCount">Number of players (not including the Mayor)</label>
+      <input id="playerCount" type="number" min="4" max="30" value="8">
+      <label for="secretWord">Secret magic word</label>
+      <input id="secretWord" type="password" maxlength="80" placeholder="Only the Mayor should know">
+      <button id="createGameBtn">Create game</button>
+      <p class="small muted">Each game gets one Seer, two Werewolves, and Villagers for everyone else.</p>
+    </section>
+
+    <section id="join" class="panel hidden">
+      <h2>Join the game</h2>
+      <p id="joinGameLabel" class="muted"></p>
+      <label for="playerName">Your name</label>
+      <input id="playerName" maxlength="30" autocomplete="nickname" placeholder="Enter your name">
+      <button id="joinGameBtn">Join game</button>
+    </section>
+
+    <section id="hostLobby" class="panel hidden">
+      <span class="pill">Mayor's screen</span>
+      <h2>Game lobby</h2>
+      <p id="hostStatus" class="muted">Waiting for players…</p>
+      <div id="qrCode" class="qr"></div>
+      <p class="small muted">Players scan this code with their own phones, or open the game link below.</p>
+      <div class="copyrow">
+        <input id="gameLink" readonly aria-label="Game link">
+        <button id="copyLinkBtn" class="secondary">Copy</button>
+      </div>
+      <h3>Players <span id="playerTally" class="pill">0/8</span></h3>
+      <ol id="roster" class="roster"></ol>
+      <button id="startGameBtn" disabled>Start game and assign roles</button>
+      <p class="small muted">Starting assigns roles randomly. Players can only see their own role.</p>
+      <div id="hostSecretArea" class="hidden secretbox">
+        <h3>Mayor's secret word</h3>
+        <p id="hostSecretWord" class="word"></p>
+      </div>
+    </section>
+
+    <section id="playerWaiting" class="panel hidden">
+      <span class="pill">You're in</span>
+      <h2 id="waitingTitle">Waiting for the Mayor</h2>
+      <p id="waitingText" class="muted">Your name is in the lobby. Your role will appear here when the Mayor starts the game.</p>
+      <div class="spinner" aria-hidden="true"></div>
+    </section>
+
+    <section id="playerRole" class="panel hidden">
+      <span class="pill">Your private role</span>
+      <h2 id="roleTitle">Your role</h2>
+      <p id="roleDescription" class="muted"></p>
+      <div id="roleWordArea" class="secretbox hidden">
+        <div class="small muted">Secret magic word</div>
+        <p id="roleWord" class="word"></p>
+      </div>
+      <p class="small muted">Keep your screen private. Do not show your role or word to other players.</p>
+    </section>
+
+    <section id="errorPanel" class="panel hidden">
+      <h2>Something went wrong</h2>
+      <p id="errorText"></p>
+      <button id="backHomeBtn" class="secondary">Back to home</button>
+    </section>
+
+    <footer>Werewords · Private roles · Random assignment</footer>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
