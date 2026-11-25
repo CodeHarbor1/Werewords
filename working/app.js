@@ -547,15 +547,40 @@ function tick(){
 }
 
 async function startGame(){
+  const button = $("startGameBtn");
+
+  if(button.disabled) return;
+
+  button.disabled = true;
+  button.textContent = "Assigning roles...";
+
   try{
-    await call("startGame",{gameId});
-    newGameSetupMode=false;
-    newGamePrepared=false;
+    // Firebase assigns every player's role and saves the game state.
+    const result = await call("startGame", { gameId });
+
+    if(!result?.started){
+      throw new Error("Firebase did not confirm that the game started.");
+    }
+
+    newGameSetupMode = false;
+    newGamePrepared = false;
+
+    button.textContent = "Roles assigned! Refreshing...";
+
+    // Reload only after Firebase confirms the role-assignment transaction.
+    setTimeout(() => {
+      window.location.reload();
+    }, 500);
+
   }catch(e){
+    console.error("Could not start game:", e);
+
+    button.disabled = false;
+    button.textContent = "Start Game";
+
     alert(errorText(e));
   }
 }
-
 async function endRound(reason){
   if(endingRound)return;
 
