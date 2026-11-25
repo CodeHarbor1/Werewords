@@ -435,7 +435,6 @@ async function joinGame() {
 
   } catch (e) {
     const message = errorText(e);
-
     // If game is full, return to the previous page.
     if (
       /full|maximum players|player limit|capacity/i.test(message)
