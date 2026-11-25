@@ -52,6 +52,30 @@ function fail(e){
   show("errorPanel");
 }
 
+function refreshMinutePicker(selectId){
+  const select=$(selectId);
+  const picker=document.querySelector(`[data-minute-picker="${selectId}"]`);
+  if(!select||!picker)return;
+  picker.innerHTML="";
+  [...select.options].forEach(option=>{
+    const button=document.createElement("button");
+    button.type="button";
+    button.textContent=`${option.value} min`;
+    button.setAttribute("aria-pressed",String(select.value===option.value));
+    button.addEventListener("click",()=>{
+      select.value=option.value;
+      refreshMinutePicker(selectId);
+      select.dispatchEvent(new Event("change",{bubbles:true}));
+    });
+    picker.append(button);
+  });
+}
+
+function refreshAllMinutePickers(){
+  refreshMinutePicker("timerMinutes");
+  refreshMinutePicker("hostTimerMinutes");
+}
+
 function clearSubs(){
   unsubs.forEach(f=>f());
   unsubs=[];
@@ -450,35 +474,38 @@ function watchGame(){
 
 function renderWordOptions(options=[]){
   const box=$("hostWordOptions");
+  const list=$("hostWordOptionsList");
+  if(!box||!list)return;
 
-  if(!box)return;
-
-  box.innerHTML="";
-
+  list.innerHTML="";
   options.forEach(word=>{
     const b=document.createElement("button");
-
     b.type="button";
     b.textContent=word;
     b.className=word===hostSecret?"selected":"";
-    b.disabled=false;
-
+    b.setAttribute("aria-pressed",String(word===hostSecret));
     b.onclick=async()=>{
       try{
         const result=await call("chooseWord",{gameId,word});
-
         hostSecret=result.secretWord;
         $("hostSecretWord").textContent=hostSecret;
-
         renderWordOptions(options);
-
       }catch(e){
         alert(errorText(e));
       }
     };
-
-    box.append(b);
+    list.append(b);
   });
+
+  const preview=$("hostSelectedWordPreview");
+  const previewText=$("hostSelectedWordText");
+  if(preview&&previewText){
+    const selected=!!hostSecret;
+    preview.classList.toggle("is-selected",selected);
+    previewText.textContent=selected?hostSecret:"Choose a word above";
+    const status=preview.querySelector(".preview-confirmation");
+    if(status)status.textContent=selected?"Word saved and selected":"Not selected yet";
+  }
 }
 
 function renderHost(){
@@ -704,7 +731,14 @@ async function beginNewGame(){
       $("next"+k[0].toUpperCase()+k.slice(1)+"Display").textContent=next.value;
     });
     $("hostTimerMinutes").value=String(previousSettings.timerMinutes);
-    refreshMinutePicker("hostTimerMinutes");
+    // Repaint the timer buttons from the current select value. The roster and
+    // each player's Firebase anonymous-auth session remain untouched.
+    const timerPicker=document.querySelector('[data-minute-picker="hostTimerMinutes"]');
+    if(timerPicker){
+      [...timerPicker.querySelectorAll("button")].forEach(button=>{
+        button.setAttribute("aria-pressed",String(button.textContent===`${previousSettings.timerMinutes} min`));
+      });
+    }
     document.querySelectorAll('input[name="hostWordCategory"]').forEach(x=>x.checked=previousSettings.wordCategories.includes(x.value));
     syncCategoryGroup("hostWordCategory");
     $("hostCustomWord").value=previousSettings.wordCategories.includes("custom")?(previousSecret.secretWord||""):"";
@@ -804,6 +838,8 @@ $("backHomeBtn").onclick=()=>{
 };
 
 $("timerMinutes").value='6';
+$("hostTimerMinutes").value='6';
+refreshAllMinutePickers();
 
 updateRoleVisibility();
 syncCategoryGroup("wordCategory");
