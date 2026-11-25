@@ -805,8 +805,20 @@ async function rerollWords() {
 // MAYOR DISPLAY
 // --------------------------------------------------
 
+
 function renderHost() {
   const g = gameData;
+
+  // Hide lobby details while a game is in progress or has ended.
+  // The timer and Mayor controls remain visible.
+  const lobbyDetails = $("hostLobbyDetails");
+
+  if (lobbyDetails) {
+    lobbyDetails.classList.toggle(
+      "hidden",
+      g.status !== "waiting"
+    );
+  }
 
   const wordOptionsBox = $("hostWordOptions");
 
@@ -902,6 +914,7 @@ function renderHost() {
       g.revealedWord || hostSecret;
   }
 }
+
 
 // --------------------------------------------------
 // TIMER
@@ -1132,7 +1145,7 @@ function renderLocalNav() {
     const next = document.createElement("button");
 
     next.className = "secondary";
-    next.textContent = "Hide role and pass to next player";
+    next.textContent = "Next player";
 
     next.setAttribute(
       "aria-label",
