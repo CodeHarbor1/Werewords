@@ -310,13 +310,37 @@ function watchPlayers(){
     if(newGameSetupMode&&roster.length!==rosterCache.length)newGamePrepared=false;
     rosterCache=roster;
     renderRoster(roster);
-    if(newGameSetupMode)updateNextCounts();
 
     if(!isHost){
+      const rosterIds=new Set(roster.map(p=>p.id));
+      const previousCount=localPlayers.length;
+      localPlayers=localPlayers.filter(p=>rosterIds.has(p.playerId));
+
+      if(localPlayers.length!==previousCount){
+        for(const [id,off] of privateUnsubs){
+          if(!rosterIds.has(id)){
+            off();
+            privateUnsubs.delete(id);
+          }
+        }
+        savePlayers();
+        activeIndex=Math.min(activeIndex,Math.max(0,localPlayers.length-1));
+        if(gameData)renderPlayerState(null);
+      }
+
       for(const p of localPlayers){
         if(!privateUnsubs.has(p.playerId)){
           const off=onSnapshot(doc(db,"games",gameId,"privatePlayers",p.playerId),ps=>{
-            if(!ps.exists())return;
+            if(!ps.exists()){
+              const removedId=p.playerId;
+              localPlayers=localPlayers.filter(x=>x.playerId!==removedId);
+              savePlayers();
+              privateUnsubs.get(removedId)?.();
+              privateUnsubs.delete(removedId);
+              activeIndex=Math.min(activeIndex,Math.max(0,localPlayers.length-1));
+              if(gameData)renderPlayerState(null);
+              return;
+            }
 
             const d=ps.data();
             p.roleData=d;
@@ -330,6 +354,8 @@ function watchPlayers(){
         }
       }
     }
+
+    if(newGameSetupMode)updateNextCounts();
   },fail);
 
   unsubs.push(()=>{
@@ -487,14 +513,14 @@ function renderHost(){
   }
 
   if(g.status==='vote_werewolf'){
-    $("hostEndTitle").textContent="Time/tokens ran out — everyone vote for a Werewolf";
-    $("hostEndText").textContent="The group should identify a Werewolf.";
+    $("hostEndTitle").textContent="Time or tokens ran out";
+    $("hostEndText").textContent="The round is over. The group can discuss who they think the Werewolf is.";
     $("revealedWord").textContent=g.revealedWord||hostSecret;
   }
 
   if(g.status==='guess_seer'){
-    $("hostEndTitle").textContent="The word was discovered — Werewolves identify the Seer";
-    $("hostEndText").textContent="The Werewolves now get one chance to identify the Seer.";
+    $("hostEndTitle").textContent="The magic word was discovered";
+    $("hostEndText").textContent="The round is over. Werewolves can make their final Seer guess.";
     $("revealedWord").textContent=g.revealedWord||hostSecret;
   }
 }
@@ -532,7 +558,7 @@ async function endRound(reason){
 
   try{
     await call("endRound",{gameId,reason});
-    playAnnouncement(reason==='word'?'word':'time');
+    playAnnouncement(reason);
   }catch(e){
     alert(errorText(e));
   }finally{
@@ -540,43 +566,43 @@ async function endRound(reason){
   }
 }
 
+const announcementFiles={
+  word:"DiscoveredTheMagicWord.mp3",
+  time:"RanOutOfTime.mp3",
+  tokens:"RanOutOfTokens.mp3"
+};
+const announcementAudio={};
+
 function playAnnouncement(kind){
+  const filename=announcementFiles[kind];
+  if(!filename)return;
+
   try{
-    const C=window.AudioContext||window.webkitAudioContext;
-    const ctx=new C();
+    let audio=announcementAudio[kind];
+    if(!audio){
+      audio=new Audio(new URL(filename,import.meta.url).href);
+      audio.preload="auto";
+      announcementAudio[kind]=audio;
+    }
 
-    const notes=kind==='word'?[660,880,1040]:[440,330,220];
-
-    notes.forEach((hz,i)=>{
-      const o=ctx.createOscillator();
-      const gain=ctx.createGain();
-
-      o.frequency.value=hz;
-      o.type='sine';
-
-      gain.gain.setValueAtTime(.0001,ctx.currentTime+i*.24);
-      gain.gain.exponentialRampToValueAtTime(.18,ctx.currentTime+i*.24+.03);
-      gain.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+i*.24+.2);
-
-      o.connect(gain);
-      gain.connect(ctx.destination);
-
-      o.start(ctx.currentTime+i*.24);
-      o.stop(ctx.currentTime+i*.24+.22);
+    audio.pause();
+    audio.currentTime=0;
+    const playback=audio.play();
+    if(playback?.catch)playback.catch(error=>{
+      console.warn(`Could not play ${filename}. Check that it is deployed beside app.js.`,error);
     });
-
-    setTimeout(()=>ctx.close(),1200);
-
-  }catch{}
+  }catch(error){
+    console.warn(`Could not play ${filename}.`,error);
+  }
 }
 
 function renderPlayerState(old){
   const g=gameData;
   const player=localPlayers[activeIndex];
 
-  if(old&&old.status!==g.status&&g.status==='vote_werewolf')playAnnouncement('time');
-
-  if(old&&old.status!==g.status&&g.status==='guess_seer')playAnnouncement('word');
+  if(old&&old.status!==g.status&&['vote_werewolf','guess_seer'].includes(g.status)){
+    playAnnouncement(g.endReason|| (g.status==='guess_seer'?'word':'time'));
+  }
 
   if(g.status==='waiting'){
     $("waitingTitle").textContent="Waiting for the Mayor";
@@ -586,7 +612,15 @@ function renderPlayerState(old){
     return;
   }
 
-  if(!player)return;
+  if(!player){
+    $("waitingTitle").textContent="You are no longer in this game";
+    $("waitingText").textContent=g.status==="waiting"
+      ?"The Mayor removed this player. You can add another player on this phone if needed."
+      :"The Mayor removed this player from the game.";
+    $("addAnotherPlayerBtn").classList.toggle("hidden",g.status!=="waiting");
+    show("playerWaiting");
+    return;
+  }
 
   if(old&&old.status!==g.status)roleVisible=false;
 
@@ -618,7 +652,6 @@ function renderPlayerState(old){
         :'';
 
   renderLocalNav();
-  renderVoting();
 }
 
 function renderLocalNav(){
@@ -644,60 +677,6 @@ function switchPlayer(i){
   activeIndex=i;
   roleVisible=false;
   renderPlayerState(null);
-}
-
-function renderVoting(){
-  const g=gameData;
-  const box=$("playerVoting");
-  const player=localPlayers[activeIndex];
-
-  if(!['vote_werewolf','guess_seer'].includes(g.status)||!player){
-    box.classList.add('hidden');
-    return;
-  }
-
-  box.classList.remove('hidden');
-
-  const own=player.roleData;
-
-  if(g.status==='guess_seer'&&own?.role!=='Werewolf'){
-    $("playerVoteTitle").textContent='The Werewolves are making their final guess.';
-    $("playerVoteChoices").innerHTML='Only Werewolves can submit a Seer guess.';
-    return;
-  }
-
-  $("playerVoteTitle").textContent=g.status==='vote_werewolf'
-    ?'Vote for the Werewolf'
-    :'Werewolves: choose who you think is the Seer';
-
-  const choices=$("playerVoteChoices");
-  choices.innerHTML='';
-
-  rosterCache.forEach(p=>{
-    if(p.id===player.playerId)return;
-
-    const row=document.createElement('div');
-    row.className='vote-item';
-
-    const name=document.createElement('span');
-    name.textContent=p.name;
-
-    const b=document.createElement('button');
-    b.textContent='Vote';
-
-    b.onclick=async()=>{
-      try{
-        await call('submitVote',{gameId,playerId:player.playerId,targetId:p.id});
-        b.textContent='Vote submitted';
-        b.disabled=true;
-      }catch(e){
-        alert(errorText(e));
-      }
-    };
-
-    row.append(name,b);
-    choices.append(row);
-  });
 }
 
 async function beginNewGame(){
