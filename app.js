@@ -1394,7 +1394,55 @@ $("backHomeBtn").onclick = () => {
 
   show("home");
 };
+let currentLocalPlayerIndex = 0;
 
+function showLocalPlayerNavigation() {
+  const nav = document.getElementById("localPlayerNav");
+  const count = document.getElementById("localPlayerCount");
+
+  if (!nav || !count) return;
+
+  const total = localPlayers.length;
+
+  nav.style.display = total > 1 ? "block" : "none";
+
+  if (total === 0) return;
+
+  count.textContent =
+    `Player ${currentLocalPlayerIndex + 1} of ${total} · ` +
+    (localPlayers[currentLocalPlayerIndex]?.name || "");
+}
+
+function switchLocalPlayer(direction) {
+  if (localPlayers.length < 2) return;
+
+  // Hide the previous player's secret role before switching.
+  hideRole();
+
+  currentLocalPlayerIndex =
+    (currentLocalPlayerIndex + direction + localPlayers.length) %
+    localPlayers.length;
+
+  showLocalPlayerNavigation();
+
+  // Display the selected player's role using your existing role renderer.
+  renderLocalPlayerRole(localPlayers[currentLocalPlayerIndex]);
+}
+
+document.getElementById("previousLocalPlayer")?.addEventListener(
+  "click",
+  () => switchLocalPlayer(-1)
+);
+
+document.getElementById("nextLocalPlayer")?.addEventListener(
+  "click",
+  () => switchLocalPlayer(1)
+);
+
+document.getElementById("hideRoleAndPass")?.addEventListener(
+  "click",
+  () => switchLocalPlayer(1)
+);
 // --------------------------------------------------
 // INITIAL SETTINGS
 // --------------------------------------------------
@@ -1407,3 +1455,4 @@ syncCategoryGroup("hostWordCategory");
 updateCounts();
 
 init();
+

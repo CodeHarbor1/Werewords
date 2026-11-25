@@ -59,3 +59,41 @@ footer { text-align: center; color: #7f899e; font-size: .78rem; padding: 22px 0;
 @media (max-width: 420px) {
   .role-count-grid { gap: 8px; }
 }
+.local-player-nav {
+  margin-top: 20px;
+  padding: 16px;
+  border-radius: 16px;
+  background: #252b3b;
+  text-align: center;
+}
+
+#localPlayerCount {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.local-player-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.local-player-buttons button {
+  flex: 1;
+}
+
+#hideRoleAndPass,
+#addAnotherPlayerBtn {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.local-player-nav button,
+#addAnotherPlayerBtn {
+  min-height: 46px;
+  border: 0;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
