@@ -8,7 +8,7 @@ import{getFunctions,httpsCallable}from"https://www.gstatic.com/firebasejs/11.6.0
 
 const $=id=>document.getElementById(id),sections=["loading","home","join","hostLobby","playerWaiting","playerRole","errorPanel"];
 
-let auth,db,functions,currentUser,authReady,gameId,isHost=false,gameData=null,hostSecret="",localPlayers=[],activeIndex=0,roleVisible=false,unsubs=[],timerInterval=null,rosterCache=[],endingRound=false;
+let auth,db,functions,currentUser,authReady,gameId,isHost=false,gameData=null,hostSecret="",localPlayers=[],activeIndex=0,roleVisible=false,unsubs=[],timerInterval=null,rosterCache=[],endingRound=false,newGameSetupMode=false,newGamePrepared=false;
 
 const storageKey=()=>`werewords:${gameId}:players`;
 
@@ -278,10 +278,13 @@ async function joinGame(){
     savePlayers();
 
     $("playerName").value="";
-    show("playerWaiting");
-
-    watchPlayers();
-    watchGame();
+    if(isHost){
+      show("hostLobby");
+    }else{
+      show("playerWaiting");
+      watchPlayers();
+      watchGame();
+    }
 
   }catch(e){
     fail(e);
@@ -299,8 +302,10 @@ function watchPlayers(){
   rosterUnsub=onSnapshot(collection(db,"games",gameId,"roster"),snap=>{
     const roster=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.joinedOrder-b.joinedOrder);
 
+    if(newGameSetupMode&&roster.length!==rosterCache.length)newGamePrepared=false;
     rosterCache=roster;
     renderRoster(roster);
+    if(newGameSetupMode)updateNextCounts();
 
     if(!isHost){
       for(const p of localPlayers){
@@ -445,6 +450,8 @@ function renderHost(){
   const g=gameData;
 
   $("hostWordOptions").classList.toggle("hidden",g.status!=="waiting");
+  $("hostNewGameSetup").classList.toggle("hidden",!(g.status==="waiting"&&newGameSetupMode&&!newGamePrepared));
+  $("prepareNewGameBtn").classList.toggle("hidden",!(g.status==="waiting"&&newGameSetupMode&&!newGamePrepared));
 
   $("playerTally").textContent=`${g.playerCount||0}/${g.maxPlayers}`;
 
@@ -452,9 +459,10 @@ function renderHost(){
 
   $("hostStatus").textContent=g.status==="waiting"?"Waiting for players…":"Game in progress";
 
-  $("startGameBtn").disabled=g.status!=="waiting"||(g.playerCount||0)!==g.maxPlayers;
+  $("startGameBtn").disabled=g.status!=="waiting"||(g.playerCount||0)!==g.maxPlayers||(newGameSetupMode&&!newGamePrepared);
 
-  $("startGameBtn").classList.toggle("hidden",g.status!=="waiting");
+  $("startGameBtn").classList.toggle("hidden",g.status!=="waiting"||(newGameSetupMode&&!newGamePrepared));
+  $("addPlayerBtn").classList.toggle("hidden",g.status!=="waiting");
 
   $("hostActive").classList.toggle("hidden",!['started','vote_werewolf','guess_seer'].includes(g.status));
 
@@ -476,14 +484,12 @@ function renderHost(){
     $("hostEndTitle").textContent="Time/tokens ran out — everyone vote for a Werewolf";
     $("hostEndText").textContent="The group should identify a Werewolf.";
     $("revealedWord").textContent=g.revealedWord||hostSecret;
-    renderVoteResults();
   }
 
   if(g.status==='guess_seer'){
     $("hostEndTitle").textContent="The word was discovered — Werewolves identify the Seer";
     $("hostEndText").textContent="The Werewolves now get one chance to identify the Seer.";
     $("revealedWord").textContent=g.revealedWord||hostSecret;
-    renderVoteResults();
   }
 }
 
@@ -506,6 +512,8 @@ function tick(){
 async function startGame(){
   try{
     await call("startGame",{gameId});
+    newGameSetupMode=false;
+    newGamePrepared=false;
   }catch(e){
     alert(errorText(e));
   }
@@ -518,7 +526,7 @@ async function endRound(reason){
 
   try{
     await call("endRound",{gameId,reason});
-    playAnnouncement(reason==='word'?'word':'time');
+    playAnnouncement(reason === 'word' ? 'word' : reason === 'tokens' ? 'tokens' : 'time');
   }catch(e){
     alert(errorText(e));
   }finally{
@@ -526,34 +534,21 @@ async function endRound(reason){
   }
 }
 
-function playAnnouncement(kind){
-  try{
-    const C=window.AudioContext||window.webkitAudioContext;
-    const ctx=new C();
 
-    const notes=kind==='word'?[660,880,1040]:[440,330,220];
+const soundEffects = {
+  word: new Audio("./DiscoveredTheMagicWord.mp3"),
+  time: new Audio("./RanOutOfTime.mp3"),
+  tokens: new Audio("./RanOutOfTokens.mp3")
+};
 
-    notes.forEach((hz,i)=>{
-      const o=ctx.createOscillator();
-      const gain=ctx.createGain();
+function playAnnouncement(kind) {
+  const sound = soundEffects[kind];
+  if (!sound) return;
 
-      o.frequency.value=hz;
-      o.type='sine';
-
-      gain.gain.setValueAtTime(.0001,ctx.currentTime+i*.24);
-      gain.gain.exponentialRampToValueAtTime(.18,ctx.currentTime+i*.24+.03);
-      gain.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+i*.24+.2);
-
-      o.connect(gain);
-      gain.connect(ctx.destination);
-
-      o.start(ctx.currentTime+i*.24);
-      o.stop(ctx.currentTime+i*.24+.22);
-    });
-
-    setTimeout(()=>ctx.close(),1200);
-
-  }catch{}
+  sound.currentTime = 0;
+  sound.play().catch(error => {
+    console.warn("Could not play sound effect:", error);
+  });
 }
 
 function renderPlayerState(old){
@@ -685,79 +680,83 @@ function renderVoting(){
   });
 }
 
-function renderVoteResults(){
-  const box=$("hostVoteResults");
-  const tally={};
-
-  for(const targetId of Object.values(gameData.votes||{})){
-    tally[targetId]=(tally[targetId]||0)+1;
-  }
-
-  box.innerHTML='';
-
-  const heading=document.createElement('h3');
-  heading.textContent='Votes received';
-  box.append(heading);
-
-  if(!Object.keys(tally).length){
-    box.append(document.createTextNode('No votes submitted yet.'));
-    return;
-  }
-
-  Object.entries(tally).sort((a,b)=>b[1]-a[1]).forEach(([id,n])=>{
-    const p=rosterCache.find(x=>x.id===id);
-    const line=document.createElement('p');
-
-    line.textContent=`${p?.name||'Player'}: ${n} vote${n===1?'':'s'}`;
-
-    box.append(line);
-  });
+async function beginNewGame(){
+  try{
+    await call("reopenLobby",{gameId});
+    newGameSetupMode=true;
+    newGamePrepared=false;
+    $("nextSeerCount").value=String(gameData.seerCount);
+    $("nextWerewolfCount").value=String(gameData.werewolfCount);
+    $("nextVillagerCount").value=String(gameData.villagerCount);
+    ["seerCount","werewolfCount","villagerCount"].forEach(k=>{
+      const next=$("next"+k[0].toUpperCase()+k.slice(1));
+      $("next"+k[0].toUpperCase()+k.slice(1)+"Display").textContent=next.value;
+    });
+    $("hostTimerMinutes").value=String(gameData.timerMinutes||6);
+    document.querySelectorAll('input[name="hostWordCategory"]').forEach(x=>x.checked=(gameData.wordCategories||["animals"]).includes(x.value));
+    syncCategoryGroup("hostWordCategory");
+    $("hostCustomWord").value="";
+    show("hostLobby");
+    updateNextCounts();
+    renderHost();
+  }catch(e){alert(errorText(e));}
 }
 
-async function newGame(){
-  const c={
-    seerCount:gameData.seerCount,
-    werewolfCount:gameData.werewolfCount,
-    villagerCount:gameData.villagerCount
+function nextCounts(){
+  return {
+    seerCount:+$("nextSeerCount").value,
+    werewolfCount:+$("nextWerewolfCount").value,
+    villagerCount:+$("nextVillagerCount").value
   };
+}
 
-  const timerMinutes=+$("hostTimerMinutes").value;
+function updateNextCounts(){
+  const c=nextCounts();
+  const total=c.seerCount+c.werewolfCount+c.villagerCount;
+  $("nextRoleTotal").textContent=total;
+  $("nextCountMatch").textContent=`${rosterCache.length} players currently in the lobby`;
+  $("prepareNewGameBtn").disabled=total<4||total>30||c.werewolfCount<1||total!==rosterCache.length;
+}
+
+async function prepareNewGame(){
+  const c=nextCounts();
   const wordCategories=selectedCategories("hostWordCategory");
   const customWord=$("hostCustomWord").value.trim();
-
-  if(!wordCategories.length)return alert("Select at least one word category for the next game.");
-
-  if(wordCategories.includes("custom")&&!customWord)return alert("Enter your custom word or uncheck My own word.");
-
+  const maxPlayers=c.seerCount+c.werewolfCount+c.villagerCount;
+  if(maxPlayers!==rosterCache.length)return alert(`There are ${rosterCache.length} players. Set the role total to ${rosterCache.length} before continuing.`);
+  if(!wordCategories.length)return alert("Select at least one word category.");
+  if(wordCategories.includes("custom")&&!customWord)return alert("Enter your custom word.");
   try{
-    await call("newGame",{
-      gameId,
-      ...c,
-      maxPlayers:c.seerCount+c.werewolfCount+c.villagerCount,
-      timerMinutes,
-      wordCategories,
-      customWord
+    const result=await call("newGame",{
+      gameId,...c,maxPlayers,
+      timerMinutes:+$("hostTimerMinutes").value,
+      wordCategories,customWord
     });
-
-    const data=await call("getHostSecret",{gameId});
-
-    hostSecret=data.secretWord;
-
+    hostSecret=result.secretWord;
     $("hostSecretWord").textContent=hostSecret;
-
-    renderWordOptions(data.wordOptions||[]);
-
-    $("hostEnd").classList.add("hidden");
-    $("hostActive").classList.add("hidden");
-
-  }catch(e){
-    alert(errorText(e));
-  }
+    renderWordOptions(result.wordOptions||[]);
+    newGamePrepared=true;
+    $("hostNewGameSetup").classList.add("hidden");
+    renderHost();
+  }catch(e){alert(errorText(e));}
 }
+
+
+document.querySelectorAll("[data-next-count]").forEach(b=>{
+  b.addEventListener("click",()=>{
+    const id=b.dataset.nextCount;
+    const input=$(id);
+    const n=Math.max(0,Math.min(30,+input.value+(+b.dataset.step)));
+    input.value=n;
+    $(id+"Display").textContent=n;
+    updateNextCounts();
+  });
+});
 
 $("createGameBtn").onclick=createGame;
 $("joinGameBtn").onclick=joinGame;
 $("startGameBtn").onclick=startGame;
+
 
 $("copyLinkBtn").onclick=async()=>{
   await navigator.clipboard.writeText($("gameLink").value);
@@ -775,8 +774,8 @@ $("toggleRoleBtn").addEventListener("click",togglePlayerRole,{passive:false});
 $("tokensDoneBtn").onclick=()=>endRound('tokens');
 $("wordFoundBtn").onclick=()=>endRound('word');
 
-$("newGameBtn").onclick=newGame;
-$("newGameFromEndBtn").onclick=newGame;
+$("newGameFromEndBtn").onclick=beginNewGame;
+$("prepareNewGameBtn").onclick=prepareNewGame;
 
 $("backHomeBtn").onclick=()=>{
   clearSubs();
@@ -794,3 +793,4 @@ syncCategoryGroup("hostWordCategory");
 updateCounts();
 
 init();
+
