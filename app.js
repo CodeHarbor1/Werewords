@@ -5,9 +5,29 @@ import{getAuth,signInAnonymously,onAuthStateChanged}from"https://www.gstatic.com
 import{getFirestore,doc,collection,onSnapshot}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 import{getFunctions,httpsCallable}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-functions.js";
 const $=id=>document.getElementById(id),sections=["loading","home","join","hostLobby","playerWaiting","playerRole","errorPanel"];
-let auth,db,functions,currentUser,gameId,isHost=false,gameData=null,hostSecret="",localPlayers=[],activeIndex=0,roleVisible=false,unsubs=[],timerInterval=null,rosterCache=[],endingRound=false;
+let auth,db,functions,currentUser,authReady,gameId,isHost=false,gameData=null,hostSecret="",localPlayers=[],activeIndex=0,roleVisible=false,unsubs=[],timerInterval=null,rosterCache=[],endingRound=false;
 const storageKey=()=>`werewords:${gameId}:players`;
-const call=(name,data)=>httpsCallable(functions,name)(data).then(r=>r.data);
+async function signedInUser(){
+  if(authReady)return authReady;
+  if(auth?.currentUser)return auth.currentUser;
+  throw new Error("Firebase sign-in is not ready. Refresh the page and try again.");
+}
+const call=async(name,data)=>{
+  const user=await signedInUser();
+  if(!user)throw new Error("Firebase authentication did not complete. Enable Anonymous sign-in in Firebase Authentication and refresh.");
+  // Refresh the ID token before a callable request so Firebase Functions receives
+  // the current anonymous user's authentication context.
+  await user.getIdToken(true);
+  const callable=httpsCallable(functions,name);
+  try{return (await callable(data)).data;}
+  catch(e){
+    if(e?.code==="functions/unauthenticated"){
+      await user.getIdToken(true);
+      return (await callable(data)).data;
+    }
+    throw e;
+  }
+};
 function show(id){sections.forEach(s=>$(s).classList.toggle("hidden",s!==id));}
 function errorText(e){return e?.message||"An unexpected error occurred.";}
 function fail(e){$("errorText").textContent=errorText(e);show("errorPanel");}
@@ -16,19 +36,87 @@ function savePlayers(){if(gameId)localStorage.setItem(storageKey(),JSON.stringif
 function restorePlayers(){try{return JSON.parse(localStorage.getItem(storageKey())||"[]");}catch{return[];}}
 function playerId(){return crypto.randomUUID?crypto.randomUUID():`p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`;}
 function route(){gameId=new URLSearchParams(location.search).get("game");if(gameId){localPlayers=restorePlayers();$("joinGameLabel").textContent=`Game code: ${gameId}`;show(localPlayers.length?"playerWaiting":"join");if(localPlayers.length){watchPlayers();watchGame();}}else show("home");}
-async function init(){try{const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);functions=getFunctions(app,FUNCTION_REGION);await signInAnonymously(auth);onAuthStateChanged(auth,u=>{if(u&&!currentUser){currentUser=u;route();}});}catch(e){fail(e);}}
+async function init(){
+  try{
+    const app=initializeApp(firebaseConfig);
+    auth=getAuth(app);db=getFirestore(app);functions=getFunctions(app,FUNCTION_REGION);
+    // Keep one sign-in promise and make every button action wait for it.
+    authReady=(async()=>{
+      if(auth.currentUser)return auth.currentUser;
+      const credential=await signInAnonymously(auth);
+      return credential.user;
+    })();
+    onAuthStateChanged(auth,u=>{if(u)currentUser=u;},e=>{
+      console.error("Firebase auth state error:",e);
+      fail(e);
+    });
+    currentUser=await authReady;
+    await currentUser.getIdToken(true);
+    route();
+  }catch(e){
+    console.error("Firebase initialization/sign-in failed:",e);
+    const message=e?.code==="auth/operation-not-allowed"
+      ?"Anonymous sign-in is disabled. In Firebase Console, open Authentication → Sign-in method and enable Anonymous."
+      :e?.code==="auth/unauthorized-domain"
+        ?"This website domain is not authorized. In Firebase Console, open Authentication → Settings → Authorized domains and add the GitHub Pages domain."
+        :errorText(e);
+    fail(new Error(message));
+  }
+}
 function counts(){return{seerCount:+$("seerCount").value,werewolfCount:+$("werewolfCount").value,villagerCount:+$("villagerCount").value};}
 function updateCounts(){const c=counts(),total=c.seerCount+c.werewolfCount+c.villagerCount;$("roleTotal").textContent=total;$("createGameBtn").disabled=total<4||total>30||c.werewolfCount<1;}
 document.querySelectorAll("[data-count]").forEach(b=>b.addEventListener("click",()=>{const id=b.dataset.count,input=$(id),n=Math.max(0,Math.min(30,+input.value+(+b.dataset.step)));input.value=n;$(id+"Display").textContent=n;updateCounts();}));
-$("wordCategory").addEventListener("change",()=>$("customWordWrap").classList.toggle("hidden",$("wordCategory").value!=="custom"));
-async function createGame(){const c=counts(),maxPlayers=c.seerCount+c.werewolfCount+c.villagerCount,wordCategory=$("wordCategory").value,customWord=$("customWord").value.trim();if(maxPlayers<4||maxPlayers>30||c.werewolfCount<1)return alert("Choose 4–30 players and at least one Werewolf.");if(wordCategory==="custom"&&!customWord)return alert("Enter your secret word.");$("createGameBtn").disabled=true;try{const r=await call("createGame",{...c,maxPlayers,timerMinutes:+$("timerMinutes").value,wordCategory,customWord});gameId=r.gameId;isHost=true;localPlayers=[];history.replaceState({},"",`${location.pathname}?game=${gameId}`);await loadHost();}catch(e){fail(e);}finally{updateCounts();}}
+function selectedCategories(name){return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(x=>x.value);}
+function updateCustomWordVisibility(){
+  $("customWordWrap").classList.toggle("hidden",!selectedCategories("wordCategory").includes("custom"));
+}
+function updateHostCustomWordVisibility(){
+  $("hostCustomWordWrap").classList.toggle("hidden",!selectedCategories("hostWordCategory").includes("custom"));
+}
+document.querySelectorAll('input[name="wordCategory"]').forEach(x=>x.addEventListener("change",updateCustomWordVisibility));
+document.querySelectorAll('input[name="hostWordCategory"]').forEach(x=>x.addEventListener("change",updateHostCustomWordVisibility));
+async function createGame(){
+  const c=counts(),maxPlayers=c.seerCount+c.werewolfCount+c.villagerCount;
+  const wordCategories=selectedCategories("wordCategory"),customWord=$("customWord").value.trim();
+  if(maxPlayers<4||maxPlayers>30||c.werewolfCount<1)return alert("Choose 4–30 players and at least one Werewolf.");
+  if(!wordCategories.length)return alert("Select at least one word category.");
+  if(wordCategories.includes("custom")&&!customWord)return alert("Enter your custom word or uncheck My own word.");
+  $("createGameBtn").disabled=true;
+  try{
+    const r=await call("createGame",{...c,maxPlayers,timerMinutes:+$("timerMinutes").value,wordCategories,customWord});
+    gameId=r.gameId;isHost=true;localPlayers=[];
+    history.replaceState({},"",`${location.pathname}?game=${gameId}`);
+    await loadHost();
+  }catch(e){fail(e);}finally{updateCounts();}
+}
 async function joinGame(){const name=$("playerName").value.trim();if(!name)return alert("Enter a player name.");$("joinGameBtn").disabled=true;const id=playerId();try{await call("joinGame",{gameId,name,playerId:id});localPlayers.push({playerId:id,name});savePlayers();$("playerName").value="";show("playerWaiting");watchPlayers();watchGame();}catch(e){fail(e);}finally{$("joinGameBtn").disabled=false;}}
 let rosterUnsub=null;const privateUnsubs=new Map();
 function watchPlayers(){if(rosterUnsub)rosterUnsub();rosterUnsub=onSnapshot(collection(db,"games",gameId,"roster"),snap=>{const roster=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.joinedOrder-b.joinedOrder);rosterCache=roster;renderRoster(roster);if(!isHost){for(const p of localPlayers){if(!privateUnsubs.has(p.playerId)){const off=onSnapshot(doc(db,"games",gameId,"privatePlayers",p.playerId),ps=>{if(!ps.exists())return;const d=ps.data();p.roleData=d;if(gameData?.status&&gameData.status!=='waiting'&&localPlayers[activeIndex]?.playerId===p.playerId)renderPlayerState(null);},fail);privateUnsubs.set(p.playerId,off);}}}},fail);unsubs.push(()=>{if(rosterUnsub)rosterUnsub();privateUnsubs.forEach(f=>f());privateUnsubs.clear();});}
 function renderRoster(players){if(isHost){const list=$("roster");list.innerHTML="";players.forEach((p,i)=>{const li=document.createElement("li"),span=document.createElement("span");span.textContent=p.name;li.append(span);if(gameData?.status==="waiting"){const b=document.createElement("button");b.className="secondary remove";b.textContent="Remove";b.onclick=async()=>{if(confirm(`Remove ${p.name}?`))try{await call("removePlayer",{gameId,playerId:p.id});}catch(e){alert(errorText(e));}};li.append(b);}list.append(li);});}else{$("waitingPlayers").textContent=`Players joined: ${players.map(p=>p.name).join(", ")}`;}}
-async function loadHost(){isHost=true;show("hostLobby");const link=`${location.origin}${location.pathname}?game=${encodeURIComponent(gameId)}`;$("gameLink").value=link;$("qrCode").innerHTML="";if(window.QRCode)new QRCode($("qrCode"),{text:link,width:180,height:180});watchPlayers();watchGame();try{hostSecret=(await call("getHostSecret",{gameId})).secretWord;$("hostSecretWord").textContent=hostSecret;}catch(e){fail(e);}}
+async function loadHost(){
+  isHost=true;show("hostLobby");
+  const link=`${location.origin}${location.pathname}?game=${encodeURIComponent(gameId)}`;
+  $("gameLink").value=link;$("qrCode").innerHTML="";
+  if(window.QRCode)new QRCode($("qrCode"),{text:link,width:180,height:180});
+  watchPlayers();watchGame();
+  try{const data=await call("getHostSecret",{gameId});hostSecret=data.secretWord;$("hostSecretWord").textContent=hostSecret;renderWordOptions(data.wordOptions||[]);}
+  catch(e){fail(e);}
+}
 function watchGame(){unsubs.push(onSnapshot(doc(db,"games",gameId),snap=>{if(!snap.exists())return fail(new Error("Game no longer exists."));const old=gameData;gameData=snap.data();if(isHost)renderHost();else renderPlayerState(old);},fail));}
-function renderHost(){const g=gameData;$("playerTally").textContent=`${g.playerCount||0}/${g.maxPlayers}`;$("hostRoleCounts").textContent=`${g.seerCount} Seer · ${g.werewolfCount} Werewolves · ${g.villagerCount} Villagers · ${g.timerMinutes} minute timer`;$("hostStatus").textContent=g.status==="waiting"?"Waiting for players…":"Game in progress";$("startGameBtn").disabled=g.status!=="waiting"||(g.playerCount||0)!==g.maxPlayers;$("startGameBtn").classList.toggle("hidden",g.status!=="waiting");$("hostActive").classList.toggle("hidden",!['started','vote_werewolf','guess_seer'].includes(g.status));$("hostEnd").classList.toggle("hidden",!['vote_werewolf','guess_seer'].includes(g.status));if(g.status==='started'){if(!timerInterval)timerInterval=setInterval(tick,250);$("hostTimer").textContent=formatRemaining(g.timerEndsAt?.toMillis?.()||0);$("hostPhase").textContent="Discussion is underway. The Mayor can end the round when tokens run out.";}else if(timerInterval){clearInterval(timerInterval);timerInterval=null;}if(g.status==='vote_werewolf'){$("hostEndTitle").textContent="Time/tokens ran out — everyone vote for a Werewolf";$("hostEndText").textContent="The group should identify a Werewolf.";$("revealedWord").textContent=g.revealedWord||hostSecret;renderVoteResults();}if(g.status==='guess_seer'){$("hostEndTitle").textContent="The word was discovered — Werewolves identify the Seer";$("hostEndText").textContent="The Werewolves now get one chance to identify the Seer.";$("revealedWord").textContent=g.revealedWord||hostSecret;renderVoteResults();}}
+function renderWordOptions(options=[]){
+  const box=$("hostWordOptions");if(!box)return;box.innerHTML="";
+  options.forEach(word=>{
+    const b=document.createElement("button");
+    b.type="button";b.textContent=word;b.className=word===hostSecret?"selected":"";
+    b.disabled=false;
+    b.onclick=async()=>{
+      try{const result=await call("chooseWord",{gameId,word});hostSecret=result.secretWord;$("hostSecretWord").textContent=hostSecret;renderWordOptions(options);}
+      catch(e){alert(errorText(e));}
+    };
+    box.append(b);
+  });
+}
+function renderHost(){const g=gameData;$("hostWordOptions").classList.toggle("hidden",g.status!=="waiting");$("playerTally").textContent=`${g.playerCount||0}/${g.maxPlayers}`;$("hostRoleCounts").textContent=`${g.seerCount} Seer · ${g.werewolfCount} Werewolves · ${g.villagerCount} Villagers · ${g.timerMinutes} minute timer`;$("hostStatus").textContent=g.status==="waiting"?"Waiting for players…":"Game in progress";$("startGameBtn").disabled=g.status!=="waiting"||(g.playerCount||0)!==g.maxPlayers;$("startGameBtn").classList.toggle("hidden",g.status!=="waiting");$("hostActive").classList.toggle("hidden",!['started','vote_werewolf','guess_seer'].includes(g.status));$("hostEnd").classList.toggle("hidden",!['vote_werewolf','guess_seer'].includes(g.status));if(g.status==='started'){if(!timerInterval)timerInterval=setInterval(tick,250);$("hostTimer").textContent=formatRemaining(g.timerEndsAt?.toMillis?.()||0);$("hostPhase").textContent="Discussion is underway. The Mayor can end the round when tokens run out.";}else if(timerInterval){clearInterval(timerInterval);timerInterval=null;}if(g.status==='vote_werewolf'){$("hostEndTitle").textContent="Time/tokens ran out — everyone vote for a Werewolf";$("hostEndText").textContent="The group should identify a Werewolf.";$("revealedWord").textContent=g.revealedWord||hostSecret;renderVoteResults();}if(g.status==='guess_seer'){$("hostEndTitle").textContent="The word was discovered — Werewolves identify the Seer";$("hostEndText").textContent="The Werewolves now get one chance to identify the Seer.";$("revealedWord").textContent=g.revealedWord||hostSecret;renderVoteResults();}}
 function formatRemaining(ms){const s=Math.max(0,Math.ceil((ms-Date.now())/1000));return`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;}
 function tick(){if(!gameData?.timerEndsAt?.toMillis)return;const remain=gameData.timerEndsAt.toMillis()-Date.now();$("hostTimer").textContent=formatRemaining(gameData.timerEndsAt.toMillis());if(remain<=0&&isHost&&gameData.status==='started')endRound('time');}
 async function startGame(){try{await call("startGame",{gameId});}catch(e){alert(errorText(e));}}
@@ -39,6 +127,17 @@ function renderLocalNav(){const nav=$("localPlayerNav");nav.innerHTML='';if(loca
 function switchPlayer(i){activeIndex=i;roleVisible=false;renderPlayerState(null);}
 function renderVoting(){const g=gameData,box=$("playerVoting");const player=localPlayers[activeIndex];if(!['vote_werewolf','guess_seer'].includes(g.status)||!player){box.classList.add('hidden');return;}box.classList.remove('hidden');const own=player.roleData;if(g.status==='guess_seer'&&own?.role!=='Werewolf'){$("playerVoteTitle").textContent='The Werewolves are making their final guess.';$("playerVoteChoices").innerHTML='Only Werewolves can submit a Seer guess.';return;}$("playerVoteTitle").textContent=g.status==='vote_werewolf'?'Vote for the Werewolf':'Werewolves: choose who you think is the Seer';const choices=$("playerVoteChoices");choices.innerHTML='';rosterCache.forEach(p=>{if(p.id===player.playerId)return;const row=document.createElement('div');row.className='vote-item';const name=document.createElement('span');name.textContent=p.name;const b=document.createElement('button');b.textContent='Vote';b.onclick=async()=>{try{await call('submitVote',{gameId,playerId:player.playerId,targetId:p.id});b.textContent='Vote submitted';b.disabled=true;}catch(e){alert(errorText(e));}};row.append(name,b);choices.append(row);});}
 function renderVoteResults(){const box=$("hostVoteResults");const tally={};for(const targetId of Object.values(gameData.votes||{}))tally[targetId]=(tally[targetId]||0)+1;box.innerHTML='';const heading=document.createElement('h3');heading.textContent='Votes received';box.append(heading);if(!Object.keys(tally).length){box.append(document.createTextNode('No votes submitted yet.'));return;}Object.entries(tally).sort((a,b)=>b[1]-a[1]).forEach(([id,n])=>{const p=rosterCache.find(x=>x.id===id);const line=document.createElement('p');line.textContent=`${p?.name||'Player'}: ${n} vote${n===1?'':'s'}`;box.append(line);});}
-async function newGame(){const c={seerCount:gameData.seerCount,werewolfCount:gameData.werewolfCount,villagerCount:gameData.villagerCount},timerMinutes=+$("hostTimerMinutes").value,wordCategory=$("hostWordCategory").value,customWord=$("hostCustomWord").value.trim();if(wordCategory==='custom'&&!customWord)return alert('Enter a secret word.');try{await call('newGame',{gameId,...c,maxPlayers:c.seerCount+c.werewolfCount+c.villagerCount,timerMinutes,wordCategory,customWord});hostSecret=(await call('getHostSecret',{gameId})).secretWord;$("hostSecretWord").textContent=hostSecret;$("hostEnd").classList.add('hidden');$("hostActive").classList.add('hidden');}catch(e){alert(errorText(e));}}
+async function newGame(){
+  const c={seerCount:gameData.seerCount,werewolfCount:gameData.werewolfCount,villagerCount:gameData.villagerCount};
+  const timerMinutes=+$("hostTimerMinutes").value,wordCategories=selectedCategories("hostWordCategory"),customWord=$("hostCustomWord").value.trim();
+  if(!wordCategories.length)return alert("Select at least one word category for the next game.");
+  if(wordCategories.includes("custom")&&!customWord)return alert("Enter your custom word or uncheck My own word.");
+  try{
+    await call("newGame",{gameId,...c,maxPlayers:c.seerCount+c.werewolfCount+c.villagerCount,timerMinutes,wordCategories,customWord});
+    const data=await call("getHostSecret",{gameId});hostSecret=data.secretWord;
+    $("hostSecretWord").textContent=hostSecret;renderWordOptions(data.wordOptions||[]);
+    $("hostEnd").classList.add("hidden");$("hostActive").classList.add("hidden");
+  }catch(e){alert(errorText(e));}
+}
 $("createGameBtn").onclick=createGame;$("joinGameBtn").onclick=joinGame;$("startGameBtn").onclick=startGame;$("copyLinkBtn").onclick=async()=>{await navigator.clipboard.writeText($("gameLink").value);$("copyLinkBtn").textContent='Copied';};$("addPlayerBtn").onclick=()=>{show('join');$("joinGameLabel").textContent=`Game ${gameId} · Add another player`;$('playerName').focus();};$("toggleRoleBtn").onclick=()=>{roleVisible=!roleVisible;renderPlayerState(null);};$("tokensDoneBtn").onclick=()=>endRound('tokens');$("wordFoundBtn").onclick=()=>endRound('word');$("newGameBtn").onclick=newGame;$("newGameFromEndBtn").onclick=newGame;$("backHomeBtn").onclick=()=>{clearSubs();history.replaceState({},'',location.pathname);gameId=null;localPlayers=[];show('home');};
-$("timerMinutes").value='6';updateCounts();init();
+$("timerMinutes").value='6';updateCounts();updateCustomWordVisibility();updateHostCustomWordVisibility();init();
