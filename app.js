@@ -13,6 +13,7 @@ import{initializeApp}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-app
 import{getAuth,signInAnonymously,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
 import{getFirestore,doc,collection,onSnapshot}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 import{getFunctions,httpsCallable}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-functions.js";
+
 const $=id=>document.getElementById(id),sections=["loading","home","join","hostLobby","playerWaiting","playerRole","errorPanel"];
 let auth,db,functions,currentUser,authReady,gameId,isHost=false,gameData=null,hostSecret="",localPlayers=[],activeIndex=0,roleVisible=false,unsubs=[],timerInterval=null,rosterCache=[],endingRound=false;
 const storageKey=()=>`werewords:${gameId}:players`;
@@ -21,22 +22,22 @@ async function signedInUser(){
   if(auth?.currentUser)return auth.currentUser;
   throw new Error("Firebase sign-in is not ready. Refresh the page and try again.");
 }
-const call=async(name,data)=>{
-  const user=await signedInUser();
-  if(!user)throw new Error("Firebase authentication did not complete. Enable Anonymous sign-in in Firebase Authentication and refresh.");
-  // Refresh the ID token before a callable request so Firebase Functions receives
-  // the current anonymous user's authentication context.
-  await user.getIdToken(true);
-  const callable=httpsCallable(functions,name);
-  try{return (await callable(data)).data;}
-  catch(e){
-    if(e?.code==="functions/unauthenticated"){
-      await user.getIdToken(true);
-      return (await callable(data)).data;
-    }
-    throw e;
+
+const call = async (name, data) => {
+  const user = await signedInUser();
+
+  if (!user) {
+    throw new Error(
+      "Firebase authentication did not complete. Enable Anonymous sign-in and refresh."
+    );
   }
+
+  // Use the existing authenticated session.
+  // Do not force a token refresh for every game action.
+  const callable = httpsCallable(functions, name);
+  return (await callable(data)).data;
 };
+
 function show(id){sections.forEach(s=>$(s).classList.toggle("hidden",s!==id));}
 function errorText(e){return e?.message||"An unexpected error occurred.";}
 function fail(e){$("errorText").textContent=errorText(e);show("errorPanel");}
