@@ -1,33 +1,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
-
+    function signedIn() { return request.auth != null; }
     match /games/{gameId} {
-      // Game status and player count are visible to signed-in participants.
-      // All writes are performed by trusted Cloud Functions.
       allow read: if signedIn();
       allow write: if false;
-
-      match /roster/{playerId} {
-        // Player names are visible in the lobby.
-        allow read: if signedIn();
-        allow write: if false;
-      }
-
-      match /privatePlayers/{playerId} {
-        // Each player entry is tied to the Firebase session that created it.
-        // A shared phone can create multiple entries under the same auth UID.
-        allow read: if signedIn() && resource.data.uid == request.auth.uid;
-        allow write: if false;
-      }
-
-      match /hostSecret/{secretId} {
-        // Only Admin SDK Cloud Functions can read/write this document.
-        allow read, write: if false;
-      }
+      match /roster/{playerId} { allow read: if signedIn(); allow write: if false; }
+      match /privatePlayers/{playerId} { allow read: if signedIn() && resource.data.uid == request.auth.uid; allow write: if false; }
+      match /hostSecret/{secretId} { allow read, write: if false; }
     }
   }
 }
