@@ -723,7 +723,7 @@ function renderLocalNav(){
 
     const next=document.createElement('button');
     next.className='secondary';
-    next.textContent='Hide role and pass to next player';
+    next.textContent='Next player';
     next.setAttribute('aria-label','Hide this role and show the next player');
     next.onclick=()=>switchPlayer((activeIndex+1)%localPlayers.length);
 
