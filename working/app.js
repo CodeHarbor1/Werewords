@@ -554,9 +554,7 @@ async function startGame(){
   }catch(e){
     alert(errorText(e));
   }
-}
-
-async function endRound(reason){
+}async function endRound(reason){
   if(endingRound)return;
 
   endingRound=true;
