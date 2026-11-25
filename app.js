@@ -3,7 +3,7 @@ const FUNCTION_REGION="us-west1";
 
 import{initializeApp}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import{getAuth,signInAnonymously,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
-import{getFirestore,doc,collection,onSnapshot}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+import{getFirestore,doc,collection,query,where,onSnapshot}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 import{getFunctions,httpsCallable}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-functions.js";
 
 const $=id=>document.getElementById(id),sections=["loading","home","join","hostLobby","playerWaiting","playerRole","errorPanel"];
@@ -57,6 +57,7 @@ function clearSubs(){
   unsubs=[];
   if(rosterUnsub){rosterUnsub();rosterUnsub=null;}
   if(gameUnsub){gameUnsub();gameUnsub=null;}
+  if(localSessionsUnsub){localSessionsUnsub();localSessionsUnsub=null;}
   privateUnsubs.forEach(f=>f());
   privateUnsubs.clear();
   if(timerInterval)clearInterval(timerInterval);
@@ -83,15 +84,22 @@ function route(){
   gameId=new URLSearchParams(location.search).get("game");
 
   if(gameId){
+    isHost=localStorage.getItem(`werewords:${gameId}:host")==="1";
     localPlayers=restorePlayers();
     $("joinGameLabel").textContent=`Game code: ${gameId}`;
-    show(localPlayers.length?"playerWaiting":"join");
 
-    if(localPlayers.length){
-      watchPlayers();
-      watchGame();
+    // Restore the Mayor screen after a browser refresh.
+    if(isHost){
+      show("loading");
+      loadHost();
+      return;
     }
+
+    show(localPlayers.length?"playerWaiting":"join");
+    watchPlayers();
+    watchGame();
   }else{
+    isHost=false;
     show("home");
   }
 }
@@ -254,6 +262,7 @@ async function createGame(){
     gameId=r.gameId;
     isHost=true;
     localPlayers=[];
+    localStorage.setItem(`werewords:${gameId}:host`,"1");
 
     history.replaceState({},"",`${location.pathname}?game=${gameId}`);
 
@@ -269,7 +278,7 @@ async function createGame(){
 async function joinGame(){
   const name=$("playerName").value.trim();
 
-  if(gameData && (gameData.playerCount||0)>=gameData.maxPlayers){
+  if(gameData && !gameData.lobbyReopened && (gameData.playerCount||0)>=gameData.maxPlayers){
     alert(`This game is full (${gameData.maxPlayers} players). The Mayor must remove a player or increase the role total first.`);
     return;
   }
@@ -296,17 +305,44 @@ async function joinGame(){
     }
 
   }catch(e){
-    fail(e);
+    const message=errorText(e);
+    const duplicateName=/duplicate|already\s+(?:exists|used|taken|in use)|name.{0,30}(?:taken|already|exists)|player.{0,30}(?:exists|already)/i.test(message);
+
+    if(duplicateName){
+      // Keep the player on the name-entry screen so they can choose another name.
+      show("join");
+      $("playerName").focus();
+      alert("That player name is already being used in this game. Please choose a different name.");
+    }else{
+      fail(e);
+    }
   }finally{
     $("joinGameBtn").disabled=false;
   }
 }
 
-let rosterUnsub=null,gameUnsub=null;
+let rosterUnsub=null,gameUnsub=null,localSessionsUnsub=null;
 const privateUnsubs=new Map();
 
 function watchPlayers(){
   if(rosterUnsub)rosterUnsub();
+
+  if(!isHost&&!localSessionsUnsub&&currentUser?.uid){
+    const ownSessions=query(collection(db,"games",gameId,"privatePlayers"),where("uid","==",currentUser.uid));
+    localSessionsUnsub=onSnapshot(ownSessions,snap=>{
+      const currentId=localPlayers[activeIndex]?.playerId;
+      const restored=snap.docs
+        .map(d=>({playerId:d.id,name:d.data().name,roleData:d.data()}))
+        .sort((a,b)=>(a.roleData.joinedOrder||0)-(b.roleData.joinedOrder||0));
+      localPlayers=restored;
+      const nextIndex=restored.findIndex(p=>p.playerId===currentId);
+      activeIndex=nextIndex>=0?nextIndex:Math.min(activeIndex,Math.max(0,restored.length-1));
+      savePlayers();
+      if(!isHost&&gameData)renderPlayerState(null);
+    },e=>{
+      console.warn("Could not restore this phone's player sessions:",e);
+    });
+  }
 
   rosterUnsub=onSnapshot(collection(db,"games",gameId,"roster"),snap=>{
     const roster=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.joinedOrder-b.joinedOrder);
@@ -404,7 +440,7 @@ function renderRoster(players){
     });
 
   }else{
-    $("waitingPlayers").textContent=`Players joined: ${players.map(p=>p.name).join(", ")}`;
+    $("waitingPlayers").textContent=`Players in this game (${players.length}): ${players.map(p=>p.name).join(", ")}`;
   }
 }
 
@@ -443,6 +479,12 @@ function watchGame(){
     const old=gameData;
     gameData=snap.data();
 
+    // Refresh player devices after roles are assigned, but never reload the Mayor.
+    if(old?.status==="waiting" && gameData.status==="started" && !isHost){
+      window.location.reload();
+      return;
+    }
+
     if(isHost)renderHost();
     else renderPlayerState(old);
 
@@ -451,10 +493,19 @@ function watchGame(){
 
 function renderWordOptions(options=[]){
   const box=$("hostWordOptions");
+  const list=$("hostWordOptionsList")||box;
 
-  if(!box)return;
+  if(!box||!list)return;
 
-  box.innerHTML="";
+  // A late host-secret response must never repopulate stale choices during setup.
+  if(newGameSetupMode&&!newGamePrepared){
+    list.innerHTML="";
+    box.classList.add("hidden");
+    box.style.display="none";
+    return;
+  }
+
+  list.innerHTML="";
 
   options.forEach(word=>{
     const b=document.createElement("button");
@@ -478,14 +529,28 @@ function renderWordOptions(options=[]){
       }
     };
 
-    box.append(b);
+    list.append(b);
   });
+}
+
+async function rerollWords(){
+  const button=$("rerollWordsBtn");
+  if(button)button.disabled=true;
+  try{
+    const result=await call("rerollWords",{gameId});
+    hostSecret=result.secretWord;
+    $("hostSecretWord").textContent=hostSecret;
+    renderWordOptions(result.wordOptions||[]);
+  }catch(e){alert(errorText(e));}
+  finally{if(button)button.disabled=false;}
 }
 
 function renderHost(){
   const g=gameData;
-
-  $("hostWordOptions").classList.toggle("hidden",g.status!=="waiting");
+  const wordOptionsBox=$("hostWordOptions");
+  const hideWordOptions=g.status!=="waiting"||(newGameSetupMode&&!newGamePrepared);
+  wordOptionsBox.classList.toggle("hidden",hideWordOptions);
+  wordOptionsBox.style.display=hideWordOptions?"none":"";
   $("hostNewGameSetup").classList.toggle("hidden",!(g.status==="waiting"&&newGameSetupMode&&!newGamePrepared));
   $("prepareNewGameBtn").classList.toggle("hidden",!(g.status==="waiting"&&newGameSetupMode&&!newGamePrepared));
 
@@ -547,14 +612,22 @@ function tick(){
 }
 
 async function startGame(){
+  const button=$("startGameBtn");
+  if(button){button.disabled=true;button.textContent="Starting game…";}
   try{
+    // The callable resolves only after Firebase has committed the role assignments
+    // and changed the game status. Reload so the Mayor's device fetches fresh state.
     await call("startGame",{gameId});
     newGameSetupMode=false;
     newGamePrepared=false;
+    location.reload();
   }catch(e){
+    if(button){button.disabled=false;button.textContent="Start Game";}
     alert(errorText(e));
   }
-}async function endRound(reason){
+}
+
+async function endRound(reason){
   if(endingRound)return;
 
   endingRound=true;
@@ -606,7 +679,7 @@ function renderPlayerState(old){
   if(g.status==='waiting'){
     $("waitingTitle").textContent="Waiting for the Mayor";
     $('waitingText').textContent="Your player sessions are saved on this phone. Add another player here if multiple people are sharing this phone.";
-    const full=(g.playerCount||0)>=g.maxPlayers;
+    const full=!g.lobbyReopened&&(g.playerCount||0)>=g.maxPlayers;
     $("addAnotherPlayerBtn").classList.toggle("hidden",full);
     $("addAnotherPlayerBtn").disabled=full;
     show('playerWaiting');
@@ -666,7 +739,7 @@ function renderLocalNav(){
 
     const next=document.createElement('button');
     next.className='secondary';
-    next.textContent='Next player';
+    next.textContent='Hide role and pass to next player';
     next.setAttribute('aria-label','Hide this role and show the next player');
     next.onclick=()=>switchPlayer((activeIndex+1)%localPlayers.length);
 
@@ -686,10 +759,18 @@ function switchPlayer(i){
 }
 
 async function beginNewGame(){
+  // Switch state and hide/clear the previous game's choices before the lobby
+  // is reopened, so the Firestore snapshot cannot flash the old list.
+  newGameSetupMode=true;
+  newGamePrepared=false;
+  const oldWordBox=$("hostWordOptions");
+  const oldWordList=$("hostWordOptionsList")||oldWordBox;
+  oldWordList.innerHTML="";
+  oldWordBox.classList.add("hidden");
+  oldWordBox.style.display="none";
   try{
     await call("reopenLobby",{gameId});
-    newGameSetupMode=true;
-    newGamePrepared=false;
+    gameData={...gameData,status:"waiting",lobbyReopened:true};
     $("nextSeerCount").value=String(gameData.seerCount);
     $("nextWerewolfCount").value=String(gameData.werewolfCount);
     $("nextVillagerCount").value=String(gameData.villagerCount);
@@ -739,8 +820,8 @@ async function prepareNewGame(){
     });
     hostSecret=result.secretWord;
     $("hostSecretWord").textContent=hostSecret;
-    renderWordOptions(result.wordOptions||[]);
     newGamePrepared=true;
+    renderWordOptions(result.wordOptions||[]);
     $("hostNewGameSetup").classList.add("hidden");
     renderHost();
   }catch(e){alert(errorText(e));}
@@ -769,7 +850,7 @@ $("copyLinkBtn").onclick=async()=>{
 };
 
 function openAddPlayer(){
-  if(gameData && (gameData.playerCount||0)>=gameData.maxPlayers){
+  if(gameData && !gameData.lobbyReopened && (gameData.playerCount||0)>=gameData.maxPlayers){
     alert(`This game is full (${gameData.maxPlayers} players). Remove a player or increase the role total before adding anyone.`);
     return;
   }
@@ -788,11 +869,14 @@ $("wordFoundBtn").onclick=()=>endRound('word');
 
 $("newGameFromEndBtn").onclick=beginNewGame;
 $("prepareNewGameBtn").onclick=prepareNewGame;
+$("rerollWordsBtn").onclick=rerollWords;
 
 $("backHomeBtn").onclick=()=>{
   clearSubs();
+  if(gameId)localStorage.removeItem(`werewords:${gameId}:host`);
   history.replaceState({},'',location.pathname);
   gameId=null;
+  isHost=false;
   localPlayers=[];
   show('home');
 };
