@@ -355,7 +355,10 @@ function watchPlayers(){
       }
     }
 
-    if(newGameSetupMode)updateNextCounts();
+    if(newGameSetupMode){
+      updateNextCounts();
+      renderHost();
+    }
   },fail);
 
   unsubs.push(()=>{
@@ -481,11 +484,11 @@ function renderWordOptions(options=[]){
 function renderHost(){
   const g=gameData;
 
-  $("hostWordOptions").classList.toggle("hidden",g.status!=="waiting");
+  $("hostWordOptions").classList.toggle("hidden",g.status!=="waiting"||(newGameSetupMode&&!newGamePrepared));
   $("hostNewGameSetup").classList.toggle("hidden",!(g.status==="waiting"&&newGameSetupMode&&!newGamePrepared));
   $("prepareNewGameBtn").classList.toggle("hidden",!(g.status==="waiting"&&newGameSetupMode&&!newGamePrepared));
 
-  $("playerTally").textContent=`${g.playerCount||0}/${g.maxPlayers}`;
+  $("playerTally").textContent=newGameSetupMode?`${rosterCache.length} players`:`${g.playerCount||0}/${g.maxPlayers}`;
 
   $("hostRoleCounts").textContent=`${g.seerCount} Seer · ${g.werewolfCount} Werewolves · ${g.villagerCount} Villagers · ${g.timerMinutes} minute timer`;
 
@@ -494,7 +497,6 @@ function renderHost(){
   $("startGameBtn").disabled=g.status!=="waiting"||(g.playerCount||0)!==g.maxPlayers||(newGameSetupMode&&!newGamePrepared);
 
   $("startGameBtn").classList.toggle("hidden",g.status!=="waiting"||(newGameSetupMode&&!newGamePrepared));
-  $("addPlayerBtn").classList.toggle("hidden",g.status!=="waiting");
 
   $("hostActive").classList.toggle("hidden",!['started','vote_werewolf','guess_seer'].includes(g.status));
 
@@ -680,25 +682,39 @@ function switchPlayer(i){
 }
 
 async function beginNewGame(){
+  const previousSettings={
+    seerCount:gameData.seerCount,
+    werewolfCount:gameData.werewolfCount,
+    villagerCount:gameData.villagerCount,
+    timerMinutes:gameData.timerMinutes||6,
+    wordCategories:gameData.wordCategories||["animals"]
+  };
   try{
+    // Read the current secret before reopening the lobby so a custom-word game
+    // can carry its custom word into the next round's setup.
+    const previousSecret=await call("getHostSecret",{gameId});
     await call("reopenLobby",{gameId});
     newGameSetupMode=true;
     newGamePrepared=false;
-    $("nextSeerCount").value=String(gameData.seerCount);
-    $("nextWerewolfCount").value=String(gameData.werewolfCount);
-    $("nextVillagerCount").value=String(gameData.villagerCount);
+    $("nextSeerCount").value=String(previousSettings.seerCount);
+    $("nextWerewolfCount").value=String(previousSettings.werewolfCount);
+    $("nextVillagerCount").value=String(previousSettings.villagerCount);
     ["seerCount","werewolfCount","villagerCount"].forEach(k=>{
       const next=$("next"+k[0].toUpperCase()+k.slice(1));
       $("next"+k[0].toUpperCase()+k.slice(1)+"Display").textContent=next.value;
     });
-    $("hostTimerMinutes").value=String(gameData.timerMinutes||6);
-    document.querySelectorAll('input[name="hostWordCategory"]').forEach(x=>x.checked=(gameData.wordCategories||["animals"]).includes(x.value));
+    $("hostTimerMinutes").value=String(previousSettings.timerMinutes);
+    refreshMinutePicker("hostTimerMinutes");
+    document.querySelectorAll('input[name="hostWordCategory"]').forEach(x=>x.checked=previousSettings.wordCategories.includes(x.value));
     syncCategoryGroup("hostWordCategory");
-    $("hostCustomWord").value="";
+    $("hostCustomWord").value=previousSettings.wordCategories.includes("custom")?(previousSecret.secretWord||""):"";
     show("hostLobby");
     updateNextCounts();
     renderHost();
-  }catch(e){alert(errorText(e));}
+  }catch(e){
+    console.error("Unable to reopen the next Werewords lobby:",e);
+    alert(`Could not open the next game setup. ${errorText(e)}`);
+  }
 }
 
 function nextCounts(){
@@ -769,7 +785,6 @@ function openAddPlayer(){
   $("playerName").focus();
 }
 
-$("addPlayerBtn").onclick=openAddPlayer;
 $("addAnotherPlayerBtn").onclick=openAddPlayer;
 
 $("toggleRoleBtn").addEventListener("click",togglePlayerRole,{passive:false});
