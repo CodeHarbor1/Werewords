@@ -296,7 +296,17 @@ async function joinGame(){
     }
 
   }catch(e){
-    fail(e);
+    const message=errorText(e);
+    const duplicateName=/duplicate|already\s+(?:exists|used|taken|in use)|name.{0,30}(?:taken|already|exists)|player.{0,30}(?:exists|already)/i.test(message);
+
+    if(duplicateName){
+      // Keep the player on the name-entry screen so they can choose another name.
+      show("join");
+      $("playerName").focus();
+      alert("That player name is already being used in this game. Please choose a different name.");
+    }else{
+      fail(e);
+    }
   }finally{
     $("joinGameBtn").disabled=false;
   }
@@ -485,7 +495,7 @@ function renderWordOptions(options=[]){
 function renderHost(){
   const g=gameData;
 
-  $("hostWordOptions").classList.toggle("hidden",g.status!=="waiting");
+  $("hostWordOptions").classList.toggle("hidden",g.status!=="waiting"||(newGameSetupMode&&!newGamePrepared));
   $("hostNewGameSetup").classList.toggle("hidden",!(g.status==="waiting"&&newGameSetupMode&&!newGamePrepared));
   $("prepareNewGameBtn").classList.toggle("hidden",!(g.status==="waiting"&&newGameSetupMode&&!newGamePrepared));
 
@@ -692,6 +702,8 @@ async function beginNewGame(){
     await call("reopenLobby",{gameId});
     newGameSetupMode=true;
     newGamePrepared=false;
+    $("hostWordOptions").innerHTML="";
+    $("hostWordOptions").classList.add("hidden");
     $("nextSeerCount").value=String(gameData.seerCount);
     $("nextWerewolfCount").value=String(gameData.werewolfCount);
     $("nextVillagerCount").value=String(gameData.villagerCount);

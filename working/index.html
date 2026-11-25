@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171923">
+  <title>Werewords</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    .hidden{display:none!important}.role-count-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}.role-counter{text-align:center}.counter-controls{display:flex;align-items:center;justify-content:center;gap:8px}.counter-btn{width:42px;height:42px;padding:0;border:0;border-radius:10px;background:#343b50;color:white;font-size:25px;font-weight:bold;touch-action:manipulation}.counter-value{min-width:25px;font-size:22px;font-weight:bold}.counter-btn:disabled{opacity:.35}.role-total{text-align:center;margin:14px 0}.category-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.category-grid label{display:flex;gap:8px;align-items:center;padding:8px;background:#30394d;border-radius:8px}.category-grid input{width:auto}.qr{display:flex;justify-content:center;background:white;padding:12px;width:max-content;margin:16px auto}.copyrow{display:flex;gap:8px}.copyrow input{min-width:0;flex:1}.copyrow button{width:auto}.roster li{padding:6px 0}.roster .remove{width:auto;margin-left:10px}.secretbox{padding:16px;background:#171d2b;border:1px solid #53617c;border-radius:12px;margin:14px 0}.word{text-align:center;font-size:2rem;font-weight:800}.timer{text-align:center;font-size:3rem;font-weight:800;font-variant-numeric:tabular-nums}.status{padding:12px;background:#303b53;border-radius:10px}.end-word{font-size:2.5rem}.counter-match{font-size:.9rem;color:#aeb8cc}@media(max-width:380px){.role-count-grid{gap:5px}.counter-controls{gap:3px}.counter-btn{width:35px;height:39px}.category-grid{grid-template-columns:1fr}}
+    /* Larger, easier-to-tap controls on phones and tablets. Keep role counters compact. */
+    button:not(.counter-btn):not(.remove) {
+      min-height: 60px;
+      padding: 16px 18px;
+      font-size: 1.08rem;
+      border-radius: 12px;
+      touch-action: manipulation;
+    }
+    button.remove { min-height: 42px; padding: 9px 12px; font-size: .95rem; }
+    /* Polished dropdown controls with a clear down-chevron. */
+    #timerMinutes, #hostTimerMinutes {
+      appearance: none; -webkit-appearance: none; display: block; width: 100%;
+      min-height: 60px; margin: 10px 0 22px; padding: 13px 54px 13px 17px;
+      border: 1px solid #7185aa; border-radius: 15px;
+      background-color: #202b40; color: #fff; font: inherit; font-size: 1.08rem;
+      font-weight: 750; color-scheme: dark; cursor: pointer;
+      box-shadow: inset 0 1px 0 #ffffff12, 0 5px 14px #00000020;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23dce7ff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 18px center; background-size: 20px;
+    }
+    #timerMinutes:focus, #hostTimerMinutes:focus { outline: 3px solid #9bb8ff; outline-offset: 3px; }
+    /* Word categories read and behave like selectable game-mode buttons. */
+    .category-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:12px 0 18px; }
+    .category-grid label { position:relative; display:flex; align-items:center; gap:10px; min-height:52px;
+      padding:12px 13px; border:1px solid #52617c; border-radius:13px;
+      background:linear-gradient(145deg,#303b52,#252f43); color:#e9eef9; font-weight:650;
+      cursor:pointer; transition:border-color .15s,background .15s,transform .15s; }
+    .category-grid label:has(input:checked) { border:2px solid #91b4ff; padding:11px 12px;
+      background:linear-gradient(145deg,#344f7a,#263b5d); color:#fff;
+      box-shadow:0 0 0 2px #83aaff20,0 5px 13px #00000025; }
+    .category-grid label:has(input:checked)::after { content:'Selected'; margin-left:auto; color:#cfe0ff; font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+    .category-grid input { width:19px; height:19px; flex:0 0 19px; accent-color:#91b4ff; }
+    #hostWordOptions { padding:15px; margin:14px 0; border:1px solid #7185aa; border-radius:16px; background:#202b40; }
+    #hostWordOptions h3 { margin-top:0; }
+    #hostWordOptionsList, #hostWordOptions > div:not(h3) { display:flex; flex-wrap:wrap; gap:10px; }
+    #hostWordOptions button { flex:1 1 130px; min-height:58px; border:1px solid #7185aa; border-radius:13px;
+      background:#303d56; color:#fff; font-weight:750; }
+    #hostWordOptions button.selected { border:2px solid #9fc0ff; background:linear-gradient(145deg,#315b91,#24446f);
+      box-shadow:0 0 0 3px #8bb3ff30; color:#fff; }
+    #hostWordOptions button.selected::before { content:'✓  '; color:#d9e7ff; }
+    #addPlayerBtn:disabled, #addAnotherPlayerBtn:disabled { opacity:.45; cursor:not-allowed; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .player-cycle-indicator { flex-basis: 100%; text-align: center; margin: 4px 0; }
+    .actions button { flex: 1; }
+    #toggleRoleBtn { min-height: 68px; font-size: 1.2rem; }
+    @media (max-width: 600px) {
+      button:not(.counter-btn):not(.remove) { min-height: 66px; font-size: 1.12rem; }
+      #toggleRoleBtn { min-height: 74px; font-size: 1.22rem; }
+      .copyrow button { min-width: 92px; }
+    }
+  </style>
+</head>
+<body>
+<main class="shell">
+  <header><div class="eyebrow">A social deduction game</div><h1>Werewords</h1><p class="muted">One game. Everyone joins on their own phone.</p></header>
+
+  <section id="loading" class="panel"><p>Connecting to the game…</p></section>
+
+  <section id="home" class="panel hidden">
+    <h2>Welcome, Mayor</h2><p class="muted">Create a game, choose roles and word categories, then share the QR code.</p>
+    <h3>Role distribution</h3>
+    <div class="role-count-grid">
+      <div class="role-counter"><label>Seers</label><div class="counter-controls"><button type="button" class="counter-btn" data-count="seerCount" data-step="-1">−</button><span id="seerCountDisplay" class="counter-value">1</span><button type="button" class="counter-btn" data-count="seerCount" data-step="1">+</button></div><input id="seerCount" type="hidden" value="1"></div>
+      <div class="role-counter"><label>Werewolves</label><div class="counter-controls"><button type="button" class="counter-btn" data-count="werewolfCount" data-step="-1">−</button><span id="werewolfCountDisplay" class="counter-value">2</span><button type="button" class="counter-btn" data-count="werewolfCount" data-step="1">+</button></div><input id="werewolfCount" type="hidden" value="2"></div>
+      <div class="role-counter"><label>Villagers</label><div class="counter-controls"><button type="button" class="counter-btn" data-count="villagerCount" data-step="-1">−</button><span id="villagerCountDisplay" class="counter-value">5</span><button type="button" class="counter-btn" data-count="villagerCount" data-step="1">+</button></div><input id="villagerCount" type="hidden" value="5"></div>
+    </div>
+    <p class="role-total">Total players: <strong id="roleTotal">8</strong></p>
+    <label for="timerMinutes">Timer duration</label><select id="timerMinutes"><option value="3">3 minutes</option><option value="4">4 minutes</option><option value="5">5 minutes</option><option value="6" selected>6 minutes</option><option value="7">7 minutes</option><option value="8">8 minutes</option><option value="10">10 minutes</option><option value="12">12 minutes</option><option value="15">15 minutes</option></select>
+    <h3>Word categories</h3>
+    <div class="category-grid">
+      <label><input type="checkbox" name="wordCategory" value="animals" checked> Animals</label>
+      <label><input type="checkbox" name="wordCategory" value="transit"> Transit</label>
+      <label><input type="checkbox" name="wordCategory" value="boardgames"> Board games</label>
+      <label><input type="checkbox" name="wordCategory" value="school"> School subjects</label>
+      <label><input type="checkbox" name="wordCategory" value="science"> Science</label>
+      <label><input type="checkbox" name="wordCategory" value="space"> Space</label>
+      <label><input type="checkbox" name="wordCategory" value="geography"> Geography</label>
+      <label><input type="checkbox" name="wordCategory" value="food"> Food</label>
+      <label><input type="checkbox" name="wordCategory" value="sports"> Sports</label>
+      <label><input type="checkbox" name="wordCategory" value="movies"> Movies & TV</label>
+      <label><input type="checkbox" name="wordCategory" value="music"> Music</label>
+      <label><input type="checkbox" name="wordCategory" value="history"> History</label>
+      <label><input type="checkbox" name="wordCategory" value="technology"> Technology</label>
+      <label><input type="checkbox" name="wordCategory" value="nature"> Nature</label>
+      <label><input type="checkbox" name="wordCategory" value="jobs"> Jobs</label>
+      <label><input type="checkbox" name="wordCategory" value="everyday"> Everyday objects</label>
+      <label><input type="checkbox" name="wordCategory" value="fantasy"> Fantasy</label>
+      <label><input type="checkbox" name="wordCategory" value="custom"> My own word</label>
+    </div>
+    <div id="customWordWrap" class="hidden"><label for="customWord">Your custom word</label><input id="customWord" maxlength="80" placeholder="Enter a secret word"></div>
+    <button id="createGameBtn">Create game</button>
+  </section>
+
+  <section id="join" class="panel hidden"><h2>Join the game</h2><p id="joinGameLabel" class="muted"></p><label for="playerName">Player name</label><input id="playerName" maxlength="30" autocomplete="nickname" placeholder="Enter your name"><button id="joinGameBtn">Join game</button></section>
+
+  <section id="hostLobby" class="panel hidden">
+    <span class="pill">Mayor's screen</span><h2>Game lobby</h2><p id="hostStatus" class="muted">Waiting for players…</p>
+    <div id="qrCode" class="qr"></div><p class="small muted">Players scan this code with their own phones, or open the game link below.</p>
+    <div class="copyrow"><input id="gameLink" readonly aria-label="Game link"><button id="copyLinkBtn" class="secondary">Copy</button></div>
+    <h3>Role distribution</h3><p id="hostRoleCounts" class="muted"></p>
+    <h3>Players <span id="playerTally" class="pill">0/8</span></h3><ol id="roster" class="roster"></ol>
+    <div id="hostWordOptions" class="hidden"><h3>Choose the secret word</h3><p class="muted small">Tap one word to select it. Your selection will be clearly highlighted.</p><div id="hostWordOptionsList"></div></div>
+    <button id="startGameBtn" disabled>Start game and assign roles</button>
+    <div id="hostActive" class="hidden">
+      <div id="hostSecretBox" class="secretbox"><div class="small">Mayor · Magic word</div><div id="hostSecretWord" class="word"></div></div>
+      <div id="hostTimer" class="timer">06:00</div><p id="hostPhase" class="status"></p>
+      <button id="tokensDoneBtn" class="secondary">All tokens have been used</button><button id="wordFoundBtn">The magic word was discovered</button>
+    </div>
+    <div id="hostEnd" class="hidden">
+      <h2 id="hostEndTitle"></h2><div class="secretbox"><div class="small">The secret word was</div><div id="revealedWord" class="word end-word"></div></div>
+      <p id="hostEndText" class="status"></p>
+      <button id="newGameFromEndBtn">New game (add/remove players)</button>
+    </div>
+    <div id="hostNewGameSetup" class="hidden secretbox">
+      <h3>Set up the next game</h3><p class="muted">Existing players stay logged in. Remove players above or add more before preparing the next game.</p>
+      <div class="role-count-grid">
+        <div class="role-counter"><label>Seers</label><div class="counter-controls"><button type="button" class="counter-btn" data-next-count="nextSeerCount" data-step="-1">−</button><span id="nextSeerCountDisplay" class="counter-value">1</span><button type="button" class="counter-btn" data-next-count="nextSeerCount" data-step="1">+</button></div><input id="nextSeerCount" type="hidden" value="1"></div>
+        <div class="role-counter"><label>Werewolves</label><div class="counter-controls"><button type="button" class="counter-btn" data-next-count="nextWerewolfCount" data-step="-1">−</button><span id="nextWerewolfCountDisplay" class="counter-value">2</span><button type="button" class="counter-btn" data-next-count="nextWerewolfCount" data-step="1">+</button></div><input id="nextWerewolfCount" type="hidden" value="2"></div>
+        <div class="role-counter"><label>Villagers</label><div class="counter-controls"><button type="button" class="counter-btn" data-next-count="nextVillagerCount" data-step="-1">−</button><span id="nextVillagerCountDisplay" class="counter-value">5</span><button type="button" class="counter-btn" data-next-count="nextVillagerCount" data-step="1">+</button></div><input id="nextVillagerCount" type="hidden" value="5"></div>
+      </div>
+      <p class="role-total">Role total: <strong id="nextRoleTotal">8</strong></p><p id="nextCountMatch" class="counter-match"></p>
+      <label for="hostTimerMinutes">Timer duration</label><select id="hostTimerMinutes"><option value="3">3 minutes</option><option value="4">4 minutes</option><option value="5">5 minutes</option><option value="6" selected>6 minutes</option><option value="7">7 minutes</option><option value="8">8 minutes</option><option value="10">10 minutes</option><option value="12">12 minutes</option><option value="15">15 minutes</option></select>
+      <h4>Word categories</h4><div class="category-grid">
+        <label><input type="checkbox" name="hostWordCategory" value="animals" checked> Animals</label><label><input type="checkbox" name="hostWordCategory" value="transit"> Transit</label><label><input type="checkbox" name="hostWordCategory" value="boardgames"> Board games</label><label><input type="checkbox" name="hostWordCategory" value="school"> School subjects</label><label><input type="checkbox" name="hostWordCategory" value="science"> Science</label><label><input type="checkbox" name="hostWordCategory" value="space"> Space</label><label><input type="checkbox" name="hostWordCategory" value="geography"> Geography</label><label><input type="checkbox" name="hostWordCategory" value="food"> Food</label><label><input type="checkbox" name="hostWordCategory" value="sports"> Sports</label><label><input type="checkbox" name="hostWordCategory" value="movies"> Movies & TV</label><label><input type="checkbox" name="hostWordCategory" value="music"> Music</label><label><input type="checkbox" name="hostWordCategory" value="history"> History</label><label><input type="checkbox" name="hostWordCategory" value="technology"> Technology</label><label><input type="checkbox" name="hostWordCategory" value="nature"> Nature</label><label><input type="checkbox" name="hostWordCategory" value="jobs"> Jobs</label><label><input type="checkbox" name="hostWordCategory" value="everyday"> Everyday objects</label><label><input type="checkbox" name="hostWordCategory" value="fantasy"> Fantasy</label><label><input type="checkbox" name="hostWordCategory" value="custom"> My own word</label>
+      </div>
+      <div id="hostCustomWordWrap" class="hidden"><label for="hostCustomWord">Your custom word</label><input id="hostCustomWord" maxlength="80" placeholder="Enter a secret word"></div>
+      <button id="prepareNewGameBtn">Prepare new game</button>
+    </div>
+  </section>
+
+  <section id="playerWaiting" class="panel hidden"><h2 id="waitingTitle">Waiting for the Mayor</h2><p id="waitingText" class="muted">Your player sessions are saved on this phone.</p><div id="waitingPlayers"></div><button id="addAnotherPlayerBtn" class="secondary">Add another player on this phone</button></section>
+  <section id="playerRole" class="panel hidden"><h2 id="roleTitle">Your role</h2><p id="roleDescription" class="muted"></p><div id="roleWordArea" class="secretbox hidden"><div class="small">Secret magic word</div><div id="roleWord" class="word"></div></div><button id="toggleRoleBtn" aria-expanded="false">Show role</button><div id="localPlayerNav" class="actions"></div><p id="playerGameStatus" class="status"></p></section>
+  <section id="errorPanel" class="panel hidden"><h2>Something went wrong</h2><p id="errorText"></p><button id="backHomeBtn" class="secondary">Back to home</button></section>
+  <footer>Werewords · Private roles · Random assignment</footer>
+</main>
+<script type="module" src="app.js?v=20261125-removed-player-audio-no-voting-1"></script>
+</body>
+</html>
