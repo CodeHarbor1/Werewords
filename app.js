@@ -499,9 +499,6 @@ function renderHost(){
 
   $("startGameBtn").classList.toggle("hidden",g.status!=="waiting"||(newGameSetupMode&&!newGamePrepared));
   const atCapacity=(g.playerCount||0)>=g.maxPlayers;
-  $("addPlayerBtn").classList.toggle("hidden",g.status!=="waiting");
-  $("addPlayerBtn").disabled=atCapacity;
-  $("addPlayerBtn").textContent=atCapacity?"Player limit reached":"Add player";
 
   $("hostActive").classList.toggle("hidden",!['started','vote_werewolf','guess_seer'].includes(g.status));
   $("hostSecretBox").classList.toggle("hidden",g.status!=="waiting");
@@ -784,7 +781,6 @@ function openAddPlayer(){
   $("playerName").focus();
 }
 
-$("addPlayerBtn").onclick=openAddPlayer;
 $("addAnotherPlayerBtn").onclick=openAddPlayer;
 
 $("toggleRoleBtn").addEventListener("click",togglePlayerRole,{passive:false});
