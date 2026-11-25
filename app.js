@@ -52,30 +52,6 @@ function fail(e){
   show("errorPanel");
 }
 
-function refreshMinutePicker(selectId){
-  const select=$(selectId);
-  const picker=document.querySelector(`[data-minute-picker="${selectId}"]`);
-  if(!select||!picker)return;
-  picker.innerHTML="";
-  [...select.options].forEach(option=>{
-    const button=document.createElement("button");
-    button.type="button";
-    button.textContent=`${option.value} min`;
-    button.setAttribute("aria-pressed",String(select.value===option.value));
-    button.addEventListener("click",()=>{
-      select.value=option.value;
-      refreshMinutePicker(selectId);
-      select.dispatchEvent(new Event("change",{bubbles:true}));
-    });
-    picker.append(button);
-  });
-}
-
-function refreshAllMinutePickers(){
-  refreshMinutePicker("timerMinutes");
-  refreshMinutePicker("hostTimerMinutes");
-}
-
 function clearSubs(){
   unsubs.forEach(f=>f());
   unsubs=[];
@@ -379,10 +355,7 @@ function watchPlayers(){
       }
     }
 
-    if(newGameSetupMode){
-      updateNextCounts();
-      renderHost();
-    }
+    if(newGameSetupMode)updateNextCounts();
   },fail);
 
   unsubs.push(()=>{
@@ -474,48 +447,45 @@ function watchGame(){
 
 function renderWordOptions(options=[]){
   const box=$("hostWordOptions");
-  const list=$("hostWordOptionsList");
-  if(!box||!list)return;
 
-  list.innerHTML="";
+  if(!box)return;
+
+  box.innerHTML="";
+
   options.forEach(word=>{
     const b=document.createElement("button");
+
     b.type="button";
     b.textContent=word;
     b.className=word===hostSecret?"selected":"";
-    b.setAttribute("aria-pressed",String(word===hostSecret));
+    b.disabled=false;
+
     b.onclick=async()=>{
       try{
         const result=await call("chooseWord",{gameId,word});
+
         hostSecret=result.secretWord;
         $("hostSecretWord").textContent=hostSecret;
+
         renderWordOptions(options);
+
       }catch(e){
         alert(errorText(e));
       }
     };
-    list.append(b);
-  });
 
-  const preview=$("hostSelectedWordPreview");
-  const previewText=$("hostSelectedWordText");
-  if(preview&&previewText){
-    const selected=!!hostSecret;
-    preview.classList.toggle("is-selected",selected);
-    previewText.textContent=selected?hostSecret:"Choose a word above";
-    const status=preview.querySelector(".preview-confirmation");
-    if(status)status.textContent=selected?"Word saved and selected":"Not selected yet";
-  }
+    box.append(b);
+  });
 }
 
 function renderHost(){
   const g=gameData;
 
-  $("hostWordOptions").classList.toggle("hidden",g.status!=="waiting"||(newGameSetupMode&&!newGamePrepared));
+  $("hostWordOptions").classList.toggle("hidden",g.status!=="waiting");
   $("hostNewGameSetup").classList.toggle("hidden",!(g.status==="waiting"&&newGameSetupMode&&!newGamePrepared));
   $("prepareNewGameBtn").classList.toggle("hidden",!(g.status==="waiting"&&newGameSetupMode&&!newGamePrepared));
 
-  $("playerTally").textContent=newGameSetupMode?`${rosterCache.length} players`:`${g.playerCount||0}/${g.maxPlayers}`;
+  $("playerTally").textContent=`${g.playerCount||0}/${g.maxPlayers}`;
 
   $("hostRoleCounts").textContent=`${g.seerCount} Seer · ${g.werewolfCount} Werewolves · ${g.villagerCount} Villagers · ${g.timerMinutes} minute timer`;
 
@@ -524,8 +494,10 @@ function renderHost(){
   $("startGameBtn").disabled=g.status!=="waiting"||(g.playerCount||0)!==g.maxPlayers||(newGameSetupMode&&!newGamePrepared);
 
   $("startGameBtn").classList.toggle("hidden",g.status!=="waiting"||(newGameSetupMode&&!newGamePrepared));
+  $("addPlayerBtn").classList.toggle("hidden",g.status!=="waiting");
 
   $("hostActive").classList.toggle("hidden",!['started','vote_werewolf','guess_seer'].includes(g.status));
+  $("hostSecretBox").classList.toggle("hidden",g.status!=="waiting");
 
   $("hostEnd").classList.toggle("hidden",!['vote_werewolf','guess_seer'].includes(g.status));
 
@@ -629,10 +601,6 @@ function renderPlayerState(old){
   const g=gameData;
   const player=localPlayers[activeIndex];
 
-  if(old&&old.status!==g.status&&['vote_werewolf','guess_seer'].includes(g.status)){
-    playAnnouncement(g.endReason|| (g.status==='guess_seer'?'word':'time'));
-  }
-
   if(g.status==='waiting'){
     $("waitingTitle").textContent="Waiting for the Mayor";
     $('waitingText').textContent="Your player sessions are saved on this phone. Add another player here if multiple people are sharing this phone.";
@@ -688,17 +656,22 @@ function renderLocalNav(){
   nav.innerHTML='';
 
   if(localPlayers.length>1){
+    const indicator=document.createElement('p');
+    indicator.className='small muted player-cycle-indicator';
+    indicator.textContent=`Player ${activeIndex+1} of ${localPlayers.length} · ${localPlayers[activeIndex]?.name||''}`;
+
+    const next=document.createElement('button');
+    next.className='secondary';
+    next.textContent='Hide role and pass to next player';
+    next.setAttribute('aria-label','Hide this role and show the next player');
+    next.onclick=()=>switchPlayer((activeIndex+1)%localPlayers.length);
+
     const prev=document.createElement('button');
     prev.className='secondary';
     prev.textContent='Previous player';
     prev.onclick=()=>switchPlayer((activeIndex-1+localPlayers.length)%localPlayers.length);
 
-    const next=document.createElement('button');
-    next.className='secondary';
-    next.textContent='Next player';
-    next.onclick=()=>switchPlayer((activeIndex+1)%localPlayers.length);
-
-    nav.append(prev,next);
+    nav.append(indicator,next,prev);
   }
 }
 
@@ -709,46 +682,25 @@ function switchPlayer(i){
 }
 
 async function beginNewGame(){
-  const previousSettings={
-    seerCount:gameData.seerCount,
-    werewolfCount:gameData.werewolfCount,
-    villagerCount:gameData.villagerCount,
-    timerMinutes:gameData.timerMinutes||6,
-    wordCategories:gameData.wordCategories||["animals"]
-  };
   try{
-    // Read the current secret before reopening the lobby so a custom-word game
-    // can carry its custom word into the next round's setup.
-    const previousSecret=await call("getHostSecret",{gameId});
     await call("reopenLobby",{gameId});
     newGameSetupMode=true;
     newGamePrepared=false;
-    $("nextSeerCount").value=String(previousSettings.seerCount);
-    $("nextWerewolfCount").value=String(previousSettings.werewolfCount);
-    $("nextVillagerCount").value=String(previousSettings.villagerCount);
+    $("nextSeerCount").value=String(gameData.seerCount);
+    $("nextWerewolfCount").value=String(gameData.werewolfCount);
+    $("nextVillagerCount").value=String(gameData.villagerCount);
     ["seerCount","werewolfCount","villagerCount"].forEach(k=>{
       const next=$("next"+k[0].toUpperCase()+k.slice(1));
       $("next"+k[0].toUpperCase()+k.slice(1)+"Display").textContent=next.value;
     });
-    $("hostTimerMinutes").value=String(previousSettings.timerMinutes);
-    // Repaint the timer buttons from the current select value. The roster and
-    // each player's Firebase anonymous-auth session remain untouched.
-    const timerPicker=document.querySelector('[data-minute-picker="hostTimerMinutes"]');
-    if(timerPicker){
-      [...timerPicker.querySelectorAll("button")].forEach(button=>{
-        button.setAttribute("aria-pressed",String(button.textContent===`${previousSettings.timerMinutes} min`));
-      });
-    }
-    document.querySelectorAll('input[name="hostWordCategory"]').forEach(x=>x.checked=previousSettings.wordCategories.includes(x.value));
+    $("hostTimerMinutes").value=String(gameData.timerMinutes||6);
+    document.querySelectorAll('input[name="hostWordCategory"]').forEach(x=>x.checked=(gameData.wordCategories||["animals"]).includes(x.value));
     syncCategoryGroup("hostWordCategory");
-    $("hostCustomWord").value=previousSettings.wordCategories.includes("custom")?(previousSecret.secretWord||""):"";
+    $("hostCustomWord").value="";
     show("hostLobby");
     updateNextCounts();
     renderHost();
-  }catch(e){
-    console.error("Unable to reopen the next Werewords lobby:",e);
-    alert(`Could not open the next game setup. ${errorText(e)}`);
-  }
+  }catch(e){alert(errorText(e));}
 }
 
 function nextCounts(){
@@ -819,6 +771,7 @@ function openAddPlayer(){
   $("playerName").focus();
 }
 
+$("addPlayerBtn").onclick=openAddPlayer;
 $("addAnotherPlayerBtn").onclick=openAddPlayer;
 
 $("toggleRoleBtn").addEventListener("click",togglePlayerRole,{passive:false});
@@ -838,8 +791,6 @@ $("backHomeBtn").onclick=()=>{
 };
 
 $("timerMinutes").value='6';
-$("hostTimerMinutes").value='6';
-refreshAllMinutePickers();
 
 updateRoleVisibility();
 syncCategoryGroup("wordCategory");
