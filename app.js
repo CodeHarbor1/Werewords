@@ -473,14 +473,18 @@ function watchPlayers() {
 
   rosterUnsub = onSnapshot(
     collection(db, "games", gameId, "roster"),
+    { includeMetadataChanges: true },
 
     snap => {
       const roster = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => (a.joinedOrder || 0) - (b.joinedOrder || 0));
+        .sort((a, b) =>
+          (a.joinedOrder || 0) - (b.joinedOrder || 0)
+        );
 
       if (
         newGameSetupMode &&
+        !snap.metadata.fromCache &&
         roster.length !== rosterCache.length
       ) {
         newGamePrepared = false;
@@ -490,34 +494,38 @@ function watchPlayers() {
       renderRoster(roster);
 
       if (!isHost) {
-        const rosterIds = new Set(roster.map(p => p.id));
 
-        const previousCount = localPlayers.length;
+        // Only reconcile saved players against a confirmed
+        // server snapshot, never an incomplete cache snapshot.
+        if (!snap.metadata.fromCache) {
+          const rosterIds = new Set(roster.map(p => p.id));
 
-        // Keep only sessions that still exist in the game roster.
-        localPlayers = localPlayers.filter(
-          p => rosterIds.has(p.playerId)
-        );
+          const previousCount = localPlayers.length;
 
-        if (localPlayers.length !== previousCount) {
-          for (const [id, off] of privateUnsubs) {
-            if (!rosterIds.has(id)) {
-              off();
-              privateUnsubs.delete(id);
-            }
-          }
-
-          savePlayers();
-
-          activeIndex = Math.min(
-            activeIndex,
-            Math.max(0, localPlayers.length - 1)
+          localPlayers = localPlayers.filter(
+            p => rosterIds.has(p.playerId)
           );
 
-          if (gameData) renderPlayerState(null);
+          if (localPlayers.length !== previousCount) {
+            for (const [id, off] of privateUnsubs) {
+              if (!rosterIds.has(id)) {
+                off();
+                privateUnsubs.delete(id);
+              }
+            }
+
+            savePlayers();
+
+            activeIndex = Math.min(
+              activeIndex,
+              Math.max(0, localPlayers.length - 1)
+            );
+
+            if (gameData) renderPlayerState(null);
+          }
         }
 
-        // Listen to each saved player's private role document.
+        // Restore a listener for every player on this phone.
         for (const p of localPlayers) {
           if (!privateUnsubs.has(p.playerId)) {
             const off = onSnapshot(
@@ -528,9 +536,15 @@ function watchPlayers() {
                 "privatePlayers",
                 p.playerId
               ),
+              { includeMetadataChanges: true },
 
               ps => {
+
+                // Do not interpret a missing cached document
+                // as a player being removed.
                 if (!ps.exists()) {
+                  if (ps.metadata.fromCache) return;
+
                   const removedId = p.playerId;
 
                   localPlayers = localPlayers.filter(
