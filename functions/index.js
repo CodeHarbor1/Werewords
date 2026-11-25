@@ -47,123 +47,19 @@ function config(d){
   if(!uniquePool.length)throw new HttpsError('invalid-argument','No words are available for those categories.');
   const wordOptions=shuffle([...uniquePool]).slice(0,Math.min(5,uniquePool.length));
   const secretWord=wordOptions[crypto.randomInt(wordOptions.length)];
-  return{seerCount,werewolfCount,villagerCount,maxPlayers,timerMinutes,wordCategories,wordOptions,secretWord};
+  return{seerCount,werewolfCount,villagerCount,maxPlayers,timerMinutes,wordCategories,customWord,wordOptions,secretWord};
 }
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=crypto.randomInt(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
 async function requireMayor(ref,uid){const s=await ref.get();if(!s.exists)throw new HttpsError('not-found','Game not found.');if(s.data().hostUid!==uid)throw new HttpsError('permission-denied','Only the Mayor can do that.');return s.data();}
-exports.createGame=onCall(async req=>{const uid=uidOf(req),c=config(req.data||{}),id=crypto.randomBytes(8).toString('hex'),ref=db.collection('games').doc(id),batch=db.batch();batch.set(ref,{hostUid:uid,seerCount:c.seerCount,werewolfCount:c.werewolfCount,villagerCount:c.villagerCount,maxPlayers:c.maxPlayers,playerCount:0,timerMinutes:c.timerMinutes,wordCategories:c.wordCategories,status:'waiting',phase:'lobby',votes:{},createdAt:FieldValue.serverTimestamp()});batch.set(ref.collection('hostSecret').doc('secret'),{secretWord:c.secretWord,wordOptions:c.wordOptions,hostUid:uid});await batch.commit();return{gameId:id};});
-
-exports.joinGame = onCall(async req => {
-  const uid = uidOf(req);
-  const id = req.data?.gameId;
-  const name = nameOf(req.data?.name);
-  const playerId = req.data?.playerId;
-
-  if (
-    typeof playerId !== 'string' ||
-    !/^[A-Za-z0-9_-]{16,80}$/.test(playerId)
-  ) {
-    throw new HttpsError('invalid-argument', 'Invalid player session.');
-  }
-
-  const ref = gameRef(id);
-  const rr = ref.collection('roster').doc(playerId);
-  const pr = ref.collection('privatePlayers').doc(playerId);
-
-  // Normalize names: ignore capitalization and extra whitespace.
-  const normalizedName = name.normalize('NFKC')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLowerCase();
-
-  await db.runTransaction(async tx => {
-    const gs = await tx.get(ref);
-
-    if (!gs.exists) {
-      throw new HttpsError('not-found', 'Game not found.');
-    }
-
-    const [rs, ps, all] = await Promise.all([
-      tx.get(rr),
-      tx.get(pr),
-      tx.get(ref.collection('roster'))
-    ]);
-
-    // Allow an existing session to reconnect.
-    if (rs.exists && ps.exists && ps.data().uid === uid) return;
-
-    if (gs.data().status !== 'waiting') {
-      throw new HttpsError(
-        'failed-precondition',
-        'This game has already started.'
-      );
-    }
-
-    if (rs.exists || ps.exists) {
-      throw new HttpsError(
-        'already-exists',
-        'Player session already exists.'
-      );
-    }
-
-    // Prevent duplicate names, regardless of capitalization.
-    const duplicate = all.docs.some(doc => {
-      const existingName = String(doc.data().name || '')
-        .normalize('NFKC')
-        .trim()
-        .replace(/\s+/g, ' ')
-        .toLowerCase();
-
-      return existingName === normalizedName;
-    });
-
-    if (duplicate) {
-      throw new HttpsError(
-        'already-exists',
-        'That name is already taken. Please choose another name.'
-      );
-    }
-
-    if (all.size >= gs.data().maxPlayers) {
-      throw new HttpsError(
-        'resource-exhausted',
-        'The game is full.'
-      );
-    }
-
-    const order = all.docs.reduce(
-      (m, d) => Math.max(m, Number(d.data().joinedOrder) || 0),
-      0
-    ) + 1;
-
-    tx.set(rr, {
-      name,
-      joinedOrder: order,
-      joinedAt: FieldValue.serverTimestamp()
-    });
-
-    tx.set(pr, {
-      uid,
-      name,
-      role: null,
-      secretWord: null,
-      joinedOrder: order
-    });
-
-    tx.update(ref, {
-      playerCount: all.size + 1
-    });
-  });
-
-  return { joined: true, playerId };
-});
-
-exports.removePlayer=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId),id=req.data?.playerId;const game=await requireMayor(ref,uid);if(game.status!=='waiting')throw new HttpsError('failed-precondition','Players can only be removed before the game starts.');const rr=ref.collection('roster').doc(id),pr=ref.collection('privatePlayers').doc(id);await db.runTransaction(async tx=>{const [r,p,all]=await Promise.all([tx.get(rr),tx.get(pr),tx.get(ref.collection('roster'))]);if(!r.exists)throw new HttpsError('not-found','Player not found.');tx.delete(rr);if(p.exists)tx.delete(pr);tx.update(ref,{playerCount:Math.max(0,all.size-1)});});return{removed:true};});
-exports.startGame=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId);await db.runTransaction(async tx=>{const gs=await tx.get(ref);if(!gs.exists)throw new HttpsError('not-found','Game not found.');const g=gs.data();if(g.hostUid!==uid)throw new HttpsError('permission-denied','Only the Mayor can start the game.');if(g.status!=='waiting')throw new HttpsError('failed-precondition','Game already started.');const [rs,ss]=await Promise.all([tx.get(ref.collection('roster')),tx.get(ref.collection('hostSecret').doc('secret'))]);if(rs.size!==g.maxPlayers)throw new HttpsError('failed-precondition',`Waiting for all ${g.maxPlayers} players.`);if(!ss.exists)throw new HttpsError('internal','Secret word missing.');const roles=shuffle([...Array(g.seerCount).fill('Seer'),...Array(g.werewolfCount).fill('Werewolf'),...Array(g.villagerCount).fill('Villager')]);rs.docs.forEach((p,i)=>tx.update(ref.collection('privatePlayers').doc(p.id),{role:roles[i],secretWord:['Seer','Werewolf'].includes(roles[i])?ss.data().secretWord:null}));tx.update(ref,{status:'started',phase:'discussion',reconfiguring:false,votes:{},startedAt:FieldValue.serverTimestamp(),timerEndsAt:Timestamp.fromMillis(Date.now()+g.timerMinutes*60000),revealedWord:null});});return{started:true};});
+exports.createGame=onCall(async req=>{const uid=uidOf(req),c=config(req.data||{}),id=crypto.randomBytes(8).toString('hex'),ref=db.collection('games').doc(id),batch=db.batch();batch.set(ref,{hostUid:uid,seerCount:c.seerCount,werewolfCount:c.werewolfCount,villagerCount:c.villagerCount,maxPlayers:c.maxPlayers,playerCount:0,timerMinutes:c.timerMinutes,wordCategories:c.wordCategories,customWord:c.customWord,lobbyReopened:false,status:'waiting',phase:'lobby',votes:{},createdAt:FieldValue.serverTimestamp()});batch.set(ref.collection('hostSecret').doc('secret'),{secretWord:c.secretWord,wordOptions:c.wordOptions,hostUid:uid});await batch.commit();return{gameId:id};});
+exports.joinGame=onCall(async req=>{const uid=uidOf(req),id=req.data?.gameId,name=nameOf(req.data?.name),playerId=req.data?.playerId;if(typeof playerId!=='string'||!/^[A-Za-z0-9_-]{16,80}$/.test(playerId))throw new HttpsError('invalid-argument','Invalid player session.');const ref=gameRef(id),rr=ref.collection('roster').doc(playerId),pr=ref.collection('privatePlayers').doc(playerId);await db.runTransaction(async tx=>{const gs=await tx.get(ref);if(!gs.exists)throw new HttpsError('not-found','Game not found.');const [rs,ps,all]=await Promise.all([tx.get(rr),tx.get(pr),tx.get(ref.collection('roster'))]);if(rs.exists&&ps.exists&&ps.data().uid===uid)return;if(gs.data().status!=='waiting')throw new HttpsError('failed-precondition','This game has already started.');if(rs.exists||ps.exists)throw new HttpsError('already-exists','Player session already exists.');if(all.size>=gs.data().maxPlayers&&!gs.data().lobbyReopened)throw new HttpsError('resource-exhausted','The game is full.');const order=all.docs.reduce((m,d)=>Math.max(m,Number(d.data().joinedOrder)||0),0)+1;tx.set(rr,{name,joinedOrder:order,joinedAt:FieldValue.serverTimestamp()});tx.set(pr,{uid,name,role:null,secretWord:null,joinedOrder:order});tx.update(ref,{playerCount:all.size+1,...(gs.data().lobbyReopened?{maxPlayers:all.size+1}:{})});});return{joined:true,playerId};});
+exports.removePlayer=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId),id=req.data?.playerId;const game=await requireMayor(ref,uid);if(game.status!=='waiting')throw new HttpsError('failed-precondition','Players can only be removed before the game starts.');const rr=ref.collection('roster').doc(id),pr=ref.collection('privatePlayers').doc(id);await db.runTransaction(async tx=>{const [r,p,all]=await Promise.all([tx.get(rr),tx.get(pr),tx.get(ref.collection('roster'))]);if(!r.exists)throw new HttpsError('not-found','Player not found.');tx.delete(rr);if(p.exists)tx.delete(pr);tx.update(ref,{playerCount:Math.max(0,all.size-1),...(game.lobbyReopened?{maxPlayers:Math.max(0,all.size-1)}:{})});});return{removed:true};});
+exports.startGame=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId);await db.runTransaction(async tx=>{const gs=await tx.get(ref);if(!gs.exists)throw new HttpsError('not-found','Game not found.');const g=gs.data();if(g.hostUid!==uid)throw new HttpsError('permission-denied','Only the Mayor can start the game.');if(g.status!=='waiting')throw new HttpsError('failed-precondition','Game already started.');const [rs,ss]=await Promise.all([tx.get(ref.collection('roster')),tx.get(ref.collection('hostSecret').doc('secret'))]);if(rs.size!==g.maxPlayers)throw new HttpsError('failed-precondition',`Waiting for all ${g.maxPlayers} players.`);if(!ss.exists)throw new HttpsError('internal','Secret word missing.');const roles=shuffle([...Array(g.seerCount).fill('Seer'),...Array(g.werewolfCount).fill('Werewolf'),...Array(g.villagerCount).fill('Villager')]);rs.docs.forEach((p,i)=>tx.update(ref.collection('privatePlayers').doc(p.id),{role:roles[i],secretWord:['Seer','Werewolf'].includes(roles[i])?ss.data().secretWord:null}));tx.update(ref,{status:'started',phase:'discussion',votes:{},startedAt:FieldValue.serverTimestamp(),timerEndsAt:Timestamp.fromMillis(Date.now()+g.timerMinutes*60000),revealedWord:null});});return{started:true};});
 exports.endRound=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId),reason=req.data?.reason;if(!['time','tokens','word'].includes(reason))throw new HttpsError('invalid-argument','Invalid end reason.');const g=await requireMayor(ref,uid);if(g.status!=='started')throw new HttpsError('failed-precondition','The round is not active.');const ss=await ref.collection('hostSecret').doc('secret').get();await ref.update({status:reason==='word'?'guess_seer':'vote_werewolf',phase:reason==='word'?'guess_seer':'vote_werewolf',endReason:reason,revealedWord:ss.data().secretWord,endedAt:FieldValue.serverTimestamp(),votes:{}});return{ended:true};});
-exports.newGame=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId),game=await requireMayor(ref,uid);if(game.status!=='waiting')throw new HttpsError('failed-precondition','Open the next-game lobby before preparing a new game.');if(game.reconfiguring!==true)throw new HttpsError('failed-precondition','The lobby is not in next-game setup mode.');const c=config(req.data||{}),roster=await ref.collection('roster').get();if(roster.size!==c.maxPlayers)throw new HttpsError('failed-precondition',`The role counts total ${c.maxPlayers}, but ${roster.size} players are logged in. Adjust the role counts to match the player total.`);const privateSnaps=await Promise.all(roster.docs.map(p=>ref.collection('privatePlayers').doc(p.id).get()));const batch=db.batch();roster.docs.forEach((p,i)=>{const old=privateSnaps[i].data();if(!privateSnaps[i].exists||!old?.uid)throw new HttpsError('failed-precondition',`Player session for ${p.data().name} is incomplete. Remove that player and have them rejoin.`);batch.set(ref.collection('privatePlayers').doc(p.id),{uid:old.uid,name:p.data().name,role:null,secretWord:null,joinedOrder:p.data().joinedOrder});});batch.set(ref.collection('hostSecret').doc('secret'),{secretWord:c.secretWord,wordOptions:c.wordOptions,hostUid:uid});batch.update(ref,{seerCount:c.seerCount,werewolfCount:c.werewolfCount,villagerCount:c.villagerCount,maxPlayers:c.maxPlayers,playerCount:roster.size,timerMinutes:c.timerMinutes,wordCategories:c.wordCategories,status:'waiting',phase:'lobby',reconfiguring:true,votes:{},revealedWord:null,endReason:null,timerEndsAt:null,startedAt:null,endedAt:null});await batch.commit();return{reset:true,wordOptions:c.wordOptions,secretWord:c.secretWord};});
+exports.newGame=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId),game=await requireMayor(ref,uid);if(game.status!=='waiting')throw new HttpsError('failed-precondition','Reopen the lobby before preparing a new game.');const c=config(req.data||{}),roster=await ref.collection('roster').get();if(roster.size!==c.maxPlayers)throw new HttpsError('failed-precondition',`The role counts total ${c.maxPlayers}, but ${roster.size} players are logged in. Adjust the role counts to match the player total.`);const privateSnaps=await Promise.all(roster.docs.map(p=>ref.collection('privatePlayers').doc(p.id).get()));const batch=db.batch();roster.docs.forEach((p,i)=>{const old=privateSnaps[i].data()||{};batch.set(ref.collection('privatePlayers').doc(p.id),{uid:old.uid,name:p.data().name,role:null,secretWord:null,joinedOrder:p.data().joinedOrder});});batch.set(ref.collection('hostSecret').doc('secret'),{secretWord:c.secretWord,wordOptions:c.wordOptions,hostUid:uid});batch.update(ref,{seerCount:c.seerCount,werewolfCount:c.werewolfCount,villagerCount:c.villagerCount,maxPlayers:c.maxPlayers,playerCount:roster.size,timerMinutes:c.timerMinutes,wordCategories:c.wordCategories,customWord:c.customWord,lobbyReopened:false,status:'waiting',phase:'lobby',votes:{},revealedWord:null,endReason:null,timerEndsAt:null,startedAt:null,endedAt:null});await batch.commit();return{reset:true,wordOptions:c.wordOptions,secretWord:c.secretWord};});
+exports.rerollWords=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId),g=await requireMayor(ref,uid);if(g.status!=='waiting')throw new HttpsError('failed-precondition','Words can only be rerolled before the game starts.');const categories=Array.isArray(g.wordCategories)?g.wordCategories:['animals'];const pool=[];for(const category of categories){if(category==='custom'){if(g.customWord)pool.push(g.customWord);}else if(WORDS[category])pool.push(...WORDS[category]);}const unique=[...new Map(pool.map(w=>[w.toLowerCase(),w])).values()];if(!unique.length)throw new HttpsError('failed-precondition','No words are available for the selected categories.');const wordOptions=shuffle(unique).slice(0,Math.min(5,unique.length));const secretWord=wordOptions[crypto.randomInt(wordOptions.length)];await ref.collection('hostSecret').doc('secret').set({secretWord,wordOptions,hostUid:uid});return{secretWord,wordOptions};});
 exports.getHostSecret=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId),g=await requireMayor(ref,uid),s=await ref.collection('hostSecret').doc('secret').get();if(!s.exists)throw new HttpsError('not-found','Secret word not found.');return{secretWord:s.data().secretWord,wordOptions:s.data().wordOptions||[s.data().secretWord]};});
 exports.chooseWord=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId),word=req.data?.word;if(typeof word!=='string'||!word.trim())throw new HttpsError('invalid-argument','Choose one of the suggested words.');const g=await requireMayor(ref,uid);if(g.status!=='waiting')throw new HttpsError('failed-precondition','The word can only be changed before the game starts.');const ss=await ref.collection('hostSecret').doc('secret').get();if(!ss.exists||!(ss.data().wordOptions||[]).includes(word))throw new HttpsError('invalid-argument','That word is not in this game’s word choices.');await ref.collection('hostSecret').doc('secret').update({secretWord:word});return{selected:true,secretWord:word};});
 exports.submitVote=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId),playerId=req.data?.playerId,targetId=req.data?.targetId;if(typeof playerId!=='string'||typeof targetId!=='string')throw new HttpsError('invalid-argument','Choose a player.');await db.runTransaction(async tx=>{const gs=await tx.get(ref);if(!gs.exists)throw new HttpsError('not-found','Game not found.');const g=gs.data();if(!['vote_werewolf','guess_seer'].includes(g.status))throw new HttpsError('failed-precondition','Voting is not open.');const voter=await tx.get(ref.collection('privatePlayers').doc(playerId));const target=await tx.get(ref.collection('privatePlayers').doc(targetId));if(!voter.exists||voter.data().uid!==uid)throw new HttpsError('permission-denied','This is not your player session.');if(!target.exists)throw new HttpsError('not-found','Target player not found.');if(playerId===targetId)throw new HttpsError('invalid-argument','You cannot vote for yourself.');if(g.status==='guess_seer'&&voter.data().role!=='Werewolf')throw new HttpsError('permission-denied','Only Werewolves can identify the Seer.');const votes={...(g.votes||{}),[playerId]:targetId};tx.update(ref,{votes});});return{submitted:true};});
 
-exports.reopenLobby=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId);const g=await requireMayor(ref,uid);if(!['vote_werewolf','guess_seer'].includes(g.status))throw new HttpsError('failed-precondition','A new lobby can only be opened after the round ends.');await ref.update({status:'waiting',phase:'lobby',reconfiguring:true,votes:{},revealedWord:null,endReason:null,timerEndsAt:null,startedAt:null,endedAt:null});return{reopened:true,playerCount:g.playerCount||0};});
+exports.reopenLobby=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId);const g=await requireMayor(ref,uid);if(!['vote_werewolf','guess_seer'].includes(g.status))throw new HttpsError('failed-precondition','A new lobby can only be opened after the round ends.');await ref.update({status:'waiting',phase:'lobby',lobbyReopened:true,votes:{},revealedWord:null,endReason:null,timerEndsAt:null,startedAt:null,endedAt:null});return{reopened:true,playerCount:g.playerCount||0};});

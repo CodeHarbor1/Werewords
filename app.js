@@ -3,7 +3,7 @@ const FUNCTION_REGION="us-west1";
 
 import{initializeApp}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import{getAuth,signInAnonymously,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
-import{getFirestore,doc,collection,onSnapshot}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+import{getFirestore,doc,collection,query,where,onSnapshot}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
 import{getFunctions,httpsCallable}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-functions.js";
 
 const $=id=>document.getElementById(id),sections=["loading","home","join","hostLobby","playerWaiting","playerRole","errorPanel"];
@@ -57,6 +57,7 @@ function clearSubs(){
   unsubs=[];
   if(rosterUnsub){rosterUnsub();rosterUnsub=null;}
   if(gameUnsub){gameUnsub();gameUnsub=null;}
+  if(localSessionsUnsub){localSessionsUnsub();localSessionsUnsub=null;}
   privateUnsubs.forEach(f=>f());
   privateUnsubs.clear();
   if(timerInterval)clearInterval(timerInterval);
@@ -87,10 +88,8 @@ function route(){
     $("joinGameLabel").textContent=`Game code: ${gameId}`;
     show(localPlayers.length?"playerWaiting":"join");
 
-    if(localPlayers.length){
-      watchPlayers();
-      watchGame();
-    }
+    watchPlayers();
+    watchGame();
   }else{
     show("home");
   }
@@ -269,7 +268,7 @@ async function createGame(){
 async function joinGame(){
   const name=$("playerName").value.trim();
 
-  if(gameData && (gameData.playerCount||0)>=gameData.maxPlayers){
+  if(gameData && !gameData.lobbyReopened && (gameData.playerCount||0)>=gameData.maxPlayers){
     alert(`This game is full (${gameData.maxPlayers} players). The Mayor must remove a player or increase the role total first.`);
     return;
   }
@@ -312,11 +311,28 @@ async function joinGame(){
   }
 }
 
-let rosterUnsub=null,gameUnsub=null;
+let rosterUnsub=null,gameUnsub=null,localSessionsUnsub=null;
 const privateUnsubs=new Map();
 
 function watchPlayers(){
   if(rosterUnsub)rosterUnsub();
+
+  if(!isHost&&!localSessionsUnsub&&currentUser?.uid){
+    const ownSessions=query(collection(db,"games",gameId,"privatePlayers"),where("uid","==",currentUser.uid));
+    localSessionsUnsub=onSnapshot(ownSessions,snap=>{
+      const currentId=localPlayers[activeIndex]?.playerId;
+      const restored=snap.docs
+        .map(d=>({playerId:d.id,name:d.data().name,roleData:d.data()}))
+        .sort((a,b)=>(a.roleData.joinedOrder||0)-(b.roleData.joinedOrder||0));
+      localPlayers=restored;
+      const nextIndex=restored.findIndex(p=>p.playerId===currentId);
+      activeIndex=nextIndex>=0?nextIndex:Math.min(activeIndex,Math.max(0,restored.length-1));
+      savePlayers();
+      if(!isHost&&gameData)renderPlayerState(null);
+    },e=>{
+      console.warn("Could not restore this phone's player sessions:",e);
+    });
+  }
 
   rosterUnsub=onSnapshot(collection(db,"games",gameId,"roster"),snap=>{
     const roster=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.joinedOrder-b.joinedOrder);
@@ -414,7 +430,7 @@ function renderRoster(players){
     });
 
   }else{
-    $("waitingPlayers").textContent=`Players joined: ${players.map(p=>p.name).join(", ")}`;
+    $("waitingPlayers").textContent=`Players in this game (${players.length}): ${players.map(p=>p.name).join(", ")}`;
   }
 }
 
@@ -499,6 +515,18 @@ function renderWordOptions(options=[]){
 
     list.append(b);
   });
+}
+
+async function rerollWords(){
+  const button=$("rerollWordsBtn");
+  if(button)button.disabled=true;
+  try{
+    const result=await call("rerollWords",{gameId});
+    hostSecret=result.secretWord;
+    $("hostSecretWord").textContent=hostSecret;
+    renderWordOptions(result.wordOptions||[]);
+  }catch(e){alert(errorText(e));}
+  finally{if(button)button.disabled=false;}
 }
 
 function renderHost(){
@@ -629,7 +657,7 @@ function renderPlayerState(old){
   if(g.status==='waiting'){
     $("waitingTitle").textContent="Waiting for the Mayor";
     $('waitingText').textContent="Your player sessions are saved on this phone. Add another player here if multiple people are sharing this phone.";
-    const full=(g.playerCount||0)>=g.maxPlayers;
+    const full=!g.lobbyReopened&&(g.playerCount||0)>=g.maxPlayers;
     $("addAnotherPlayerBtn").classList.toggle("hidden",full);
     $("addAnotherPlayerBtn").disabled=full;
     show('playerWaiting');
@@ -720,6 +748,7 @@ async function beginNewGame(){
   oldWordBox.style.display="none";
   try{
     await call("reopenLobby",{gameId});
+    gameData={...gameData,status:"waiting",lobbyReopened:true};
     $("nextSeerCount").value=String(gameData.seerCount);
     $("nextWerewolfCount").value=String(gameData.werewolfCount);
     $("nextVillagerCount").value=String(gameData.villagerCount);
@@ -799,7 +828,7 @@ $("copyLinkBtn").onclick=async()=>{
 };
 
 function openAddPlayer(){
-  if(gameData && (gameData.playerCount||0)>=gameData.maxPlayers){
+  if(gameData && !gameData.lobbyReopened && (gameData.playerCount||0)>=gameData.maxPlayers){
     alert(`This game is full (${gameData.maxPlayers} players). Remove a player or increase the role total before adding anyone.`);
     return;
   }
@@ -818,6 +847,7 @@ $("wordFoundBtn").onclick=()=>endRound('word');
 
 $("newGameFromEndBtn").onclick=beginNewGame;
 $("prepareNewGameBtn").onclick=prepareNewGame;
+$("rerollWordsBtn").onclick=rerollWords;
 
 $("backHomeBtn").onclick=()=>{
   clearSubs();

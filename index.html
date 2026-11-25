@@ -110,7 +110,7 @@
     <div class="copyrow"><input id="gameLink" readonly aria-label="Game link"><button id="copyLinkBtn" class="secondary">Copy</button></div>
     <h3>Role distribution</h3><p id="hostRoleCounts" class="muted"></p>
     <h3>Players <span id="playerTally" class="pill">0/8</span></h3><ol id="roster" class="roster"></ol>
-    <div id="hostWordOptions" class="hidden"><h3>Choose the secret word</h3><p class="muted small">Tap one word to select it. Your selection will be clearly highlighted.</p><div id="hostWordOptionsList"></div></div>
+    <div id="hostWordOptions" class="hidden"><h3>Choose the secret word</h3><p class="muted small">Tap one word to select it. Your selection will be clearly highlighted.</p><div id="hostWordOptionsList"></div><button type="button" id="rerollWordsBtn" class="secondary">Reroll words</button></div>
     <button id="startGameBtn" disabled>Start game and assign roles</button>
     <div id="hostActive" class="hidden">
       <div id="hostSecretBox" class="secretbox"><div class="small">Mayor · Magic word</div><div id="hostSecretWord" class="word"></div></div>
@@ -144,6 +144,6 @@
   <section id="errorPanel" class="panel hidden"><h2>Something went wrong</h2><p id="errorText"></p><button id="backHomeBtn" class="secondary">Back to home</button></section>
   <footer>Werewords · Private roles · Random assignment</footer>
 </main>
-<script type="module" src="app.js?v=20261125-clear-old-word-options-2"></script>
+<script type="module" src="app.js?v=20261125-reroll-roster-capacity-1"></script>
 </body>
 </html>
