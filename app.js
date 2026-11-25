@@ -461,10 +461,19 @@ function watchGame(){
 
 function renderWordOptions(options=[]){
   const box=$("hostWordOptions");
+  const list=$("hostWordOptionsList")||box;
 
-  if(!box)return;
+  if(!box||!list)return;
 
-  box.innerHTML="";
+  // A late host-secret response must never repopulate stale choices during setup.
+  if(newGameSetupMode&&!newGamePrepared){
+    list.innerHTML="";
+    box.classList.add("hidden");
+    box.style.display="none";
+    return;
+  }
+
+  list.innerHTML="";
 
   options.forEach(word=>{
     const b=document.createElement("button");
@@ -488,14 +497,16 @@ function renderWordOptions(options=[]){
       }
     };
 
-    box.append(b);
+    list.append(b);
   });
 }
 
 function renderHost(){
   const g=gameData;
-
-  $("hostWordOptions").classList.toggle("hidden",g.status!=="waiting"||(newGameSetupMode&&!newGamePrepared));
+  const wordOptionsBox=$("hostWordOptions");
+  const hideWordOptions=g.status!=="waiting"||(newGameSetupMode&&!newGamePrepared);
+  wordOptionsBox.classList.toggle("hidden",hideWordOptions);
+  wordOptionsBox.style.display=hideWordOptions?"none":"";
   $("hostNewGameSetup").classList.toggle("hidden",!(g.status==="waiting"&&newGameSetupMode&&!newGamePrepared));
   $("prepareNewGameBtn").classList.toggle("hidden",!(g.status==="waiting"&&newGameSetupMode&&!newGamePrepared));
 
@@ -698,12 +709,17 @@ function switchPlayer(i){
 }
 
 async function beginNewGame(){
+  // Switch state and hide/clear the previous game's choices before the lobby
+  // is reopened, so the Firestore snapshot cannot flash the old list.
+  newGameSetupMode=true;
+  newGamePrepared=false;
+  const oldWordBox=$("hostWordOptions");
+  const oldWordList=$("hostWordOptionsList")||oldWordBox;
+  oldWordList.innerHTML="";
+  oldWordBox.classList.add("hidden");
+  oldWordBox.style.display="none";
   try{
     await call("reopenLobby",{gameId});
-    newGameSetupMode=true;
-    newGamePrepared=false;
-    $("hostWordOptions").innerHTML="";
-    $("hostWordOptions").classList.add("hidden");
     $("nextSeerCount").value=String(gameData.seerCount);
     $("nextWerewolfCount").value=String(gameData.werewolfCount);
     $("nextVillagerCount").value=String(gameData.villagerCount);
@@ -753,8 +769,8 @@ async function prepareNewGame(){
     });
     hostSecret=result.secretWord;
     $("hostSecretWord").textContent=hostSecret;
-    renderWordOptions(result.wordOptions||[]);
     newGamePrepared=true;
+    renderWordOptions(result.wordOptions||[]);
     $("hostNewGameSetup").classList.add("hidden");
     renderHost();
   }catch(e){alert(errorText(e));}
