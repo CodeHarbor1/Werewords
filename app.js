@@ -55,6 +55,10 @@ function fail(e){
 function clearSubs(){
   unsubs.forEach(f=>f());
   unsubs=[];
+  if(rosterUnsub){rosterUnsub();rosterUnsub=null;}
+  if(gameUnsub){gameUnsub();gameUnsub=null;}
+  privateUnsubs.forEach(f=>f());
+  privateUnsubs.clear();
   if(timerInterval)clearInterval(timerInterval);
   timerInterval=null;
 }
@@ -282,6 +286,7 @@ async function joinGame(){
       show("hostLobby");
     }else{
       show("playerWaiting");
+      $("addAnotherPlayerBtn").classList.remove("hidden");
       watchPlayers();
       watchGame();
     }
@@ -293,7 +298,7 @@ async function joinGame(){
   }
 }
 
-let rosterUnsub=null;
+let rosterUnsub=null,gameUnsub=null;
 const privateUnsubs=new Map();
 
 function watchPlayers(){
@@ -401,7 +406,8 @@ async function loadHost(){
 }
 
 function watchGame(){
-  unsubs.push(onSnapshot(doc(db,"games",gameId),snap=>{
+  if(gameUnsub)gameUnsub();
+  gameUnsub=onSnapshot(doc(db,"games",gameId),snap=>{
     if(!snap.exists())return fail(new Error("Game no longer exists."));
 
     const old=gameData;
@@ -410,7 +416,7 @@ function watchGame(){
     if(isHost)renderHost();
     else renderPlayerState(old);
 
-  },fail));
+  },fail);
 }
 
 function renderWordOptions(options=[]){
@@ -526,7 +532,7 @@ async function endRound(reason){
 
   try{
     await call("endRound",{gameId,reason});
-    playAnnouncement(reason === 'word' ? 'word' : reason === 'tokens' ? 'tokens' : 'time');
+    playAnnouncement(reason==='word'?'word':'time');
   }catch(e){
     alert(errorText(e));
   }finally{
@@ -534,21 +540,34 @@ async function endRound(reason){
   }
 }
 
+function playAnnouncement(kind){
+  try{
+    const C=window.AudioContext||window.webkitAudioContext;
+    const ctx=new C();
 
-const soundEffects = {
-  word: new Audio("./DiscoveredTheMagicWord.mp3"),
-  time: new Audio("./RanOutOfTime.mp3"),
-  tokens: new Audio("./RanOutOfTokens.mp3")
-};
+    const notes=kind==='word'?[660,880,1040]:[440,330,220];
 
-function playAnnouncement(kind) {
-  const sound = soundEffects[kind];
-  if (!sound) return;
+    notes.forEach((hz,i)=>{
+      const o=ctx.createOscillator();
+      const gain=ctx.createGain();
 
-  sound.currentTime = 0;
-  sound.play().catch(error => {
-    console.warn("Could not play sound effect:", error);
-  });
+      o.frequency.value=hz;
+      o.type='sine';
+
+      gain.gain.setValueAtTime(.0001,ctx.currentTime+i*.24);
+      gain.gain.exponentialRampToValueAtTime(.18,ctx.currentTime+i*.24+.03);
+      gain.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+i*.24+.2);
+
+      o.connect(gain);
+      gain.connect(ctx.destination);
+
+      o.start(ctx.currentTime+i*.24);
+      o.stop(ctx.currentTime+i*.24+.22);
+    });
+
+    setTimeout(()=>ctx.close(),1200);
+
+  }catch{}
 }
 
 function renderPlayerState(old){
@@ -561,7 +580,8 @@ function renderPlayerState(old){
 
   if(g.status==='waiting'){
     $("waitingTitle").textContent="Waiting for the Mayor";
-    $('waitingText').textContent="Your player session is saved on this phone. Add more players if needed.";
+    $('waitingText').textContent="Your player sessions are saved on this phone. Add another player here if multiple people are sharing this phone.";
+    $("addAnotherPlayerBtn").classList.remove("hidden");
     show('playerWaiting');
     return;
   }
@@ -763,11 +783,15 @@ $("copyLinkBtn").onclick=async()=>{
   $("copyLinkBtn").textContent='Copied';
 };
 
-$("addPlayerBtn").onclick=()=>{
-  show('join');
-  $("joinGameLabel").textContent=`Game ${gameId} · Add another player`;
-  $('playerName').focus();
-};
+function openAddPlayer(){
+  $("playerName").value="";
+  $("joinGameLabel").textContent=`Game ${gameId} · Add another player on this phone`;
+  show("join");
+  $("playerName").focus();
+}
+
+$("addPlayerBtn").onclick=openAddPlayer;
+$("addAnotherPlayerBtn").onclick=openAddPlayer;
 
 $("toggleRoleBtn").addEventListener("click",togglePlayerRole,{passive:false});
 
@@ -793,4 +817,3 @@ syncCategoryGroup("hostWordCategory");
 updateCounts();
 
 init();
-

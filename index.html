@@ -9,6 +9,23 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     .hidden{display:none!important}.role-count-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}.role-counter{text-align:center}.counter-controls{display:flex;align-items:center;justify-content:center;gap:8px}.counter-btn{width:42px;height:42px;padding:0;border:0;border-radius:10px;background:#343b50;color:white;font-size:25px;font-weight:bold;touch-action:manipulation}.counter-value{min-width:25px;font-size:22px;font-weight:bold}.counter-btn:disabled{opacity:.35}.role-total{text-align:center;margin:14px 0}.category-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.category-grid label{display:flex;gap:8px;align-items:center;padding:8px;background:#30394d;border-radius:8px}.category-grid input{width:auto}.qr{display:flex;justify-content:center;background:white;padding:12px;width:max-content;margin:16px auto}.copyrow{display:flex;gap:8px}.copyrow input{min-width:0;flex:1}.copyrow button{width:auto}.roster li{padding:6px 0}.roster .remove{width:auto;margin-left:10px}.secretbox{padding:16px;background:#171d2b;border:1px solid #53617c;border-radius:12px;margin:14px 0}.word{text-align:center;font-size:2rem;font-weight:800}.timer{text-align:center;font-size:3rem;font-weight:800;font-variant-numeric:tabular-nums}.status{padding:12px;background:#303b53;border-radius:10px}.end-word{font-size:2.5rem}.counter-match{font-size:.9rem;color:#aeb8cc}@media(max-width:380px){.role-count-grid{gap:5px}.counter-controls{gap:3px}.counter-btn{width:35px;height:39px}.category-grid{grid-template-columns:1fr}}
+    /* Larger, easier-to-tap controls on phones and tablets. Keep role counters compact. */
+    button:not(.counter-btn):not(.remove) {
+      min-height: 60px;
+      padding: 16px 18px;
+      font-size: 1.08rem;
+      border-radius: 12px;
+      touch-action: manipulation;
+    }
+    button.remove { min-height: 42px; padding: 9px 12px; font-size: .95rem; }
+    .actions { display: flex; gap: 10px; }
+    .actions button { flex: 1; }
+    #toggleRoleBtn { min-height: 68px; font-size: 1.2rem; }
+    @media (max-width: 600px) {
+      button:not(.counter-btn):not(.remove) { min-height: 66px; font-size: 1.12rem; }
+      #toggleRoleBtn { min-height: 74px; font-size: 1.22rem; }
+      .copyrow button { min-width: 92px; }
+    }
   </style>
 </head>
 <body>
@@ -90,11 +107,11 @@
     </div>
   </section>
 
-  <section id="playerWaiting" class="panel hidden"><h2 id="waitingTitle">Waiting for the Mayor</h2><p id="waitingText" class="muted">Your player session is saved on this phone.</p><div id="waitingPlayers"></div></section>
+  <section id="playerWaiting" class="panel hidden"><h2 id="waitingTitle">Waiting for the Mayor</h2><p id="waitingText" class="muted">Your player sessions are saved on this phone.</p><div id="waitingPlayers"></div><button id="addAnotherPlayerBtn" class="secondary">Add another player on this phone</button></section>
   <section id="playerRole" class="panel hidden"><h2 id="roleTitle">Your role</h2><p id="roleDescription" class="muted"></p><div id="roleWordArea" class="secretbox hidden"><div class="small">Secret magic word</div><div id="roleWord" class="word"></div></div><button id="toggleRoleBtn" aria-expanded="false">Show role</button><div id="localPlayerNav" class="actions"></div><p id="playerGameStatus" class="status"></p><div id="playerVoting" class="hidden"><h3 id="playerVoteTitle"></h3><div id="playerVoteChoices"></div></div></section>
   <section id="errorPanel" class="panel hidden"><h2>Something went wrong</h2><p id="errorText"></p><button id="backHomeBtn" class="secondary">Back to home</button></section>
   <footer>Werewords · Private roles · Random assignment</footer>
 </main>
-<script type="module" src="app.js?v=20261125-newgame-roster-1"></script>
+<script type="module" src="app.js?v=20261125-multiple-phone-players-big-buttons-2"></script>
 </body>
 </html>
