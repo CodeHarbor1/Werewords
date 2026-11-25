@@ -1,4 +1,4 @@
-const firebaseConfig={apiKey:"AIzaSyARhmPQ5H6rLAAG-h4QRMVrUJ6BoeOI3f",authDomain:"werewords-349d4.firebaseapp.com",projectId:"werewords-349d4",storageBucket:"werewords-349d4.firebasestorage.app",messagingSenderId:"487978125953",appId:"1:487978125953:web:7962f8641c58975eb25b80",measurementId:"G-88124QX62X"};
+const firebaseConfig={apiKey:"AIzaSyARhmPQ5H6rLAAG-h4QRMVrUJ6BoeOI3fM",authDomain:"werewords-349d4.firebaseapp.com",projectId:"werewords-349d4",storageBucket:"werewords-349d4.firebasestorage.app",messagingSenderId:"487978125953",appId:"1:487978125953:web:7962f8641c58975eb25b80",measurementId:"G-88124QX62X"};
 const FUNCTION_REGION="us-west1";
 import{initializeApp}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
 import{getAuth,signInAnonymously,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
