@@ -6,19 +6,21 @@ service cloud.firestore {
     }
 
     match /games/{gameId} {
-      // Public game status and player count only. Secret word is never stored here.
+      // Game status and player count are visible to signed-in participants.
+      // All writes are performed by trusted Cloud Functions.
       allow read: if signedIn();
       allow write: if false;
 
-      match /roster/{playerUid} {
-        // Names and join order are visible in the lobby.
+      match /roster/{playerId} {
+        // Player names are visible in the lobby.
         allow read: if signedIn();
         allow write: if false;
       }
 
-      match /privatePlayers/{playerUid} {
-        // Each player can read only their own role and word.
-        allow read: if signedIn() && request.auth.uid == playerUid;
+      match /privatePlayers/{playerId} {
+        // Each player entry is tied to the Firebase session that created it.
+        // A shared phone can create multiple entries under the same auth UID.
+        allow read: if signedIn() && resource.data.uid == request.auth.uid;
         allow write: if false;
       }
 

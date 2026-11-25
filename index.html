@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,7 +8,88 @@
   <title>Werewords</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    .role-count-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    .role-counter {
+      text-align: center;
+      min-width: 0;
+    }
+
+    .role-counter label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .counter-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .counter-btn {
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      border: none;
+      border-radius: 10px;
+      background: #343b50;
+      color: white;
+      font-size: 26px;
+      font-weight: bold;
+      cursor: pointer;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .counter-btn:active {
+      background: #4b5d85;
+      transform: scale(0.94);
+    }
+
+    .counter-value {
+      min-width: 28px;
+      font-size: 23px;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .counter-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .role-total {
+      text-align: center;
+      margin: 16px 0 22px;
+    }
+
+    @media (max-width: 380px) {
+      .role-count-grid {
+        gap: 6px;
+      }
+
+      .counter-controls {
+        gap: 4px;
+      }
+
+      .counter-btn {
+        width: 36px;
+        height: 40px;
+      }
+    }
+  </style>
 </head>
+
 <body>
   <main class="shell">
     <header>
@@ -23,34 +105,89 @@
     <section id="home" class="panel hidden">
       <h2>Welcome, Mayor</h2>
       <p class="muted">Create a game, choose the secret word, and share the QR code.</p>
+
       <h3>Choose the roles</h3>
-      <p class="small muted">The Mayor is not included. Total players are calculated from these role counts.</p>
+      <p class="small muted">
+        The Mayor is not included. Total players are calculated from these role counts.
+      </p>
+
       <div class="role-count-grid">
-        <div>
-          <label for="seerCount">Seers</label>
-          <input id="seerCount" type="number" min="0" max="30" value="1">
+
+        <!-- Seers -->
+        <div class="role-counter">
+          <label>Seers</label>
+          <div class="counter-controls">
+            <button type="button" class="counter-btn"
+                    data-counter="seerCount" data-change="-1"
+                    aria-label="Decrease Seers">−</button>
+
+            <span id="seerCountDisplay" class="counter-value">1</span>
+
+            <button type="button" class="counter-btn"
+                    data-counter="seerCount" data-change="1"
+                    aria-label="Increase Seers">+</button>
+          </div>
+          <input type="hidden" id="seerCount" value="1">
         </div>
-        <div>
-          <label for="werewolfCount">Werewolves</label>
-          <input id="werewolfCount" type="number" min="1" max="30" value="2">
+
+        <!-- Werewolves -->
+        <div class="role-counter">
+          <label>Werewolves</label>
+          <div class="counter-controls">
+            <button type="button" class="counter-btn"
+                    data-counter="werewolfCount" data-change="-1"
+                    aria-label="Decrease Werewolves">−</button>
+
+            <span id="werewolfCountDisplay" class="counter-value">2</span>
+
+            <button type="button" class="counter-btn"
+                    data-counter="werewolfCount" data-change="1"
+                    aria-label="Increase Werewolves">+</button>
+          </div>
+          <input type="hidden" id="werewolfCount" value="2">
         </div>
-        <div>
-          <label for="villagerCount">Villagers</label>
-          <input id="villagerCount" type="number" min="0" max="30" value="5">
+
+        <!-- Villagers -->
+        <div class="role-counter">
+          <label>Villagers</label>
+          <div class="counter-controls">
+            <button type="button" class="counter-btn"
+                    data-counter="villagerCount" data-change="-1"
+                    aria-label="Decrease Villagers">−</button>
+
+            <span id="villagerCountDisplay" class="counter-value">5</span>
+
+            <button type="button" class="counter-btn"
+                    data-counter="villagerCount" data-change="1"
+                    aria-label="Increase Villagers">+</button>
+          </div>
+          <input type="hidden" id="villagerCount" value="5">
         </div>
+
       </div>
-      <p class="role-total">Total players: <strong id="roleTotal">8</strong></p>
+
+      <p class="role-total">
+        Total players: <strong id="roleTotal">8</strong>
+      </p>
+
       <label for="secretWord">Secret magic word</label>
-      <input id="secretWord" type="password" maxlength="80" placeholder="Only the Mayor should know">
+      <input type="text" id="secretWord" placeholder="Enter the secret magic word">
+
       <button id="createGameBtn">Create game</button>
-      <p class="small muted">Firebase will randomly assign exactly the role counts you select.</p>
+
+      <p class="small muted">
+        Game will randomly assign exactly the role counts you select.
+      </p>
     </section>
 
     <section id="join" class="panel hidden">
       <h2>Join the game</h2>
       <p id="joinGameLabel" class="muted"></p>
+
       <label for="playerName">Your name</label>
-      <input id="playerName" maxlength="30" autocomplete="nickname" placeholder="Enter your name">
+      <input id="playerName" maxlength="30" autocomplete="nickname"
+             placeholder="Enter your name">
+
       <button id="joinGameBtn">Join game</button>
     </section>
 
@@ -58,18 +195,32 @@
       <span class="pill">Mayor's screen</span>
       <h2>Game lobby</h2>
       <p id="hostStatus" class="muted">Waiting for players…</p>
+
       <div id="qrCode" class="qr"></div>
-      <p class="small muted">Players scan this code with their own phones, or open the game link below.</p>
+
+      <p class="small muted">
+        Players scan this code with their own phones, or open the game link below.
+      </p>
+
       <div class="copyrow">
         <input id="gameLink" readonly aria-label="Game link">
         <button id="copyLinkBtn" class="secondary">Copy</button>
       </div>
+
       <h3>Role distribution</h3>
-      <p id="hostRoleCounts" class="muted">1 Seer · 2 Werewolves · 5 Villagers</p>
+      <p id="hostRoleCounts" class="muted">
+        1 Seer · 2 Werewolves · 5 Villagers
+      </p>
+
       <h3>Players <span id="playerTally" class="pill">0/8</span></h3>
       <ol id="roster" class="roster"></ol>
+
       <button id="startGameBtn" disabled>Start game and assign roles</button>
-      <p class="small muted">Starting assigns roles randomly. Players can only see their own role.</p>
+
+      <p class="small muted">
+        Starting assigns roles randomly. Players can only see their own role.
+      </p>
+
       <div id="hostSecretArea" class="hidden secretbox">
         <h3>Mayor's secret word</h3>
         <p id="hostSecretWord" class="word"></p>
@@ -79,7 +230,9 @@
     <section id="playerWaiting" class="panel hidden">
       <span class="pill">You're in</span>
       <h2 id="waitingTitle">Waiting for the Mayor</h2>
-      <p id="waitingText" class="muted">Your name is in the lobby. Your role will appear here when the Mayor starts the game.</p>
+      <p id="waitingText" class="muted">
+        Your name is in the lobby. Your role will appear here when the Mayor starts the game.
+      </p>
       <div class="spinner" aria-hidden="true"></div>
     </section>
 
@@ -87,11 +240,15 @@
       <span class="pill">Your private role</span>
       <h2 id="roleTitle">Your role</h2>
       <p id="roleDescription" class="muted"></p>
+
       <div id="roleWordArea" class="secretbox hidden">
         <div class="small muted">Secret magic word</div>
         <p id="roleWord" class="word"></p>
       </div>
-      <p class="small muted">Keep your screen private. Do not show your role or word to other players.</p>
+
+      <p class="small muted">
+        Keep your screen private. Do not show your role or word to other players.
+      </p>
     </section>
 
     <section id="errorPanel" class="panel hidden">
@@ -102,6 +259,84 @@
 
     <footer>Werewords · Private roles · Random assignment</footer>
   </main>
+
+  <script>
+    // Press once to change the count.
+    // Keep holding to continue changing the count.
+    (() => {
+      let repeatDelay = null;
+      let repeatInterval = null;
+      let activeButton = null;
+
+      function stopRepeating() {
+        clearTimeout(repeatDelay);
+        clearInterval(repeatInterval);
+        repeatDelay = null;
+        repeatInterval = null;
+
+        if (activeButton) {
+          activeButton.releasePointerCapture?.(
+            activeButton._pointerId
+          );
+        }
+
+        activeButton = null;
+      }
+
+      function changeCounter(id, amount) {
+        const input = document.getElementById(id);
+        const display = document.getElementById(id + "Display");
+
+        if (!input || !display) return;
+
+        const current = Number(input.value) || 0;
+        const next = Math.max(0, Math.min(30, current + amount));
+
+        input.value = next;
+        display.textContent = next;
+
+        // Keep the existing app.js total and validation logic working.
+        if (typeof updateRoleTotal === "function") {
+          updateRoleTotal();
+        }
+      }
+
+      document.querySelectorAll(".counter-btn").forEach(button => {
+        button.addEventListener("contextmenu", event => {
+          event.preventDefault();
+        });
+
+        button.addEventListener("pointerdown", event => {
+          event.preventDefault();
+          stopRepeating();
+
+          activeButton = button;
+          button._pointerId = event.pointerId;
+          button.setPointerCapture?.(event.pointerId);
+
+          const id = button.dataset.counter;
+          const amount = Number(button.dataset.change);
+
+          // Change immediately on the first press.
+          changeCounter(id, amount);
+
+          // Start repeating after a short hold.
+          repeatDelay = setTimeout(() => {
+            repeatInterval = setInterval(() => {
+              changeCounter(id, amount);
+            }, 120);
+          }, 400);
+        });
+
+        button.addEventListener("pointerup", stopRepeating);
+        button.addEventListener("pointercancel", stopRepeating);
+        button.addEventListener("lostpointercapture", stopRepeating);
+      });
+
+      window.addEventListener("pointerup", stopRepeating);
+      window.addEventListener("blur", stopRepeating);
+    })();
+  </script>
 
   <script type="module" src="app.js"></script>
 </body>

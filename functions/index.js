@@ -80,33 +80,108 @@ exports.joinGame = onCall(async (request) => {
   const uid = requireAuth(request);
   const id = request.data?.gameId;
   const name = cleanName(request.data?.name);
+  const playerId = request.data?.playerId;
+
+  if (typeof playerId !== "string" || !/^[A-Za-z0-9_-]{16,80}$/.test(playerId)) {
+    throw new HttpsError("invalid-argument", "Invalid player session. Please try joining again.");
+  }
+
   const ref = gameRef(id);
-  const rosterRef = ref.collection("roster").doc(uid);
-  const privateRef = ref.collection("privatePlayers").doc(uid);
+  const rosterCollection = ref.collection("roster");
+  const rosterRef = rosterCollection.doc(playerId);
+  const privateRef = ref.collection("privatePlayers").doc(playerId);
 
   await db.runTransaction(async (tx) => {
     const gameSnap = await tx.get(ref);
     if (!gameSnap.exists) throw new HttpsError("not-found", "Game not found.");
     const game = gameSnap.data();
-    if (game.status !== "waiting") throw new HttpsError("failed-precondition", "This game has already started.");
-    const existing = await tx.get(rosterRef);
-    if (existing.exists) return; // Rejoining the same game is idempotent.
+    if (game.status !== "waiting") {
+      throw new HttpsError("failed-precondition", "This game has already started.");
+    }
 
-    const count = game.playerCount || 0;
-    if (count >= game.maxPlayers) throw new HttpsError("resource-exhausted", "This game is full.");
+    // Read all documents before writing. Each entry has its own playerId,
+    // so several players may join from the same authenticated phone/browser.
+    const [existingRoster, existingPrivate, rosterSnap] = await Promise.all([
+      tx.get(rosterRef),
+      tx.get(privateRef),
+      tx.get(rosterCollection)
+    ]);
 
-    const order = count + 1;
-    tx.set(rosterRef, { name, joinedOrder: order, joinedAt: FieldValue.serverTimestamp() });
+    if (existingRoster.exists || existingPrivate.exists) {
+      if (existingRoster.exists && existingPrivate.exists &&
+          existingPrivate.data().uid === uid) {
+        return; // Safe retry of the same join request.
+      }
+      throw new HttpsError("already-exists", "That player session is already in use.");
+    }
+
+    const count = rosterSnap.size;
+    if (count >= game.maxPlayers) {
+      throw new HttpsError("resource-exhausted", "The game is full.");
+    }
+
+    const order = rosterSnap.docs.reduce(
+      (maxOrder, doc) => Math.max(maxOrder, Number(doc.data().joinedOrder) || 0),
+      0
+    ) + 1;
+
+    tx.set(rosterRef, {
+      name,
+      joinedOrder: order,
+      joinedAt: FieldValue.serverTimestamp()
+    });
     tx.set(privateRef, {
+      uid,
       name,
       role: null,
       secretWord: null,
       joinedOrder: order
     });
-    tx.update(ref, { playerCount: order });
+    tx.update(ref, { playerCount: count + 1 });
   });
 
-  return { joined: true };
+  return { joined: true, playerId };
+});
+
+exports.removePlayer = onCall(async (request) => {
+  const uid = requireAuth(request);
+  const ref = gameRef(request.data?.gameId);
+  const playerId = request.data?.playerId;
+
+  if (typeof playerId !== "string" || !/^[A-Za-z0-9_-]{16,80}$/.test(playerId)) {
+    throw new HttpsError("invalid-argument", "Invalid player.");
+  }
+
+  const rosterRef = ref.collection("roster").doc(playerId);
+  const privateRef = ref.collection("privatePlayers").doc(playerId);
+
+  await db.runTransaction(async (tx) => {
+    const gameSnap = await tx.get(ref);
+    if (!gameSnap.exists) throw new HttpsError("not-found", "Game not found.");
+
+    const game = gameSnap.data();
+    if (game.hostUid !== uid) {
+      throw new HttpsError("permission-denied", "Only the Mayor can remove players.");
+    }
+    if (game.status !== "waiting") {
+      throw new HttpsError("failed-precondition", "Players can only be removed before the game starts.");
+    }
+
+    const [rosterSnap, privateSnap] = await Promise.all([
+      tx.get(rosterRef),
+      tx.get(privateRef)
+    ]);
+
+    if (!rosterSnap.exists) {
+      throw new HttpsError("not-found", "That player is no longer in the lobby.");
+    }
+
+    tx.delete(rosterRef);
+    if (privateSnap.exists) tx.delete(privateRef);
+    tx.update(ref, { playerCount: Math.max(0, (game.playerCount || 0) - 1) });
+  });
+
+  return { removed: true };
 });
 
 exports.startGame = onCall(async (request) => {
