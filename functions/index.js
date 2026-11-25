@@ -52,7 +52,112 @@ function config(d){
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=crypto.randomInt(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
 async function requireMayor(ref,uid){const s=await ref.get();if(!s.exists)throw new HttpsError('not-found','Game not found.');if(s.data().hostUid!==uid)throw new HttpsError('permission-denied','Only the Mayor can do that.');return s.data();}
 exports.createGame=onCall(async req=>{const uid=uidOf(req),c=config(req.data||{}),id=crypto.randomBytes(8).toString('hex'),ref=db.collection('games').doc(id),batch=db.batch();batch.set(ref,{hostUid:uid,seerCount:c.seerCount,werewolfCount:c.werewolfCount,villagerCount:c.villagerCount,maxPlayers:c.maxPlayers,playerCount:0,timerMinutes:c.timerMinutes,wordCategories:c.wordCategories,status:'waiting',phase:'lobby',votes:{},createdAt:FieldValue.serverTimestamp()});batch.set(ref.collection('hostSecret').doc('secret'),{secretWord:c.secretWord,wordOptions:c.wordOptions,hostUid:uid});await batch.commit();return{gameId:id};});
-exports.joinGame=onCall(async req=>{const uid=uidOf(req),id=req.data?.gameId,name=nameOf(req.data?.name),playerId=req.data?.playerId;if(typeof playerId!=='string'||!/^[A-Za-z0-9_-]{16,80}$/.test(playerId))throw new HttpsError('invalid-argument','Invalid player session.');const ref=gameRef(id),rr=ref.collection('roster').doc(playerId),pr=ref.collection('privatePlayers').doc(playerId);await db.runTransaction(async tx=>{const gs=await tx.get(ref);if(!gs.exists)throw new HttpsError('not-found','Game not found.');const [rs,ps,all]=await Promise.all([tx.get(rr),tx.get(pr),tx.get(ref.collection('roster'))]);const g=gs.data();if(rs.exists&&ps.exists&&ps.data().uid===uid)return;if(g.status!=='waiting')throw new HttpsError('failed-precondition','This game has already started.');if(rs.exists||ps.exists)throw new HttpsError('already-exists','Player session already exists.');const joiningNextRound=g.reconfiguring===true;if(joiningNextRound?all.size>=30:all.size>=g.maxPlayers)throw new HttpsError('resource-exhausted',joiningNextRound?'The next game can have at most 30 players.':'The game is full.');const order=all.docs.reduce((m,d)=>Math.max(m,Number(d.data().joinedOrder)||0),0)+1;tx.set(rr,{name,joinedOrder:order,joinedAt:FieldValue.serverTimestamp()});tx.set(pr,{uid,name,role:null,secretWord:null,joinedOrder:order});tx.update(ref,{playerCount:all.size+1});});return{joined:true,playerId};});
+
+exports.joinGame = onCall(async req => {
+  const uid = uidOf(req);
+  const id = req.data?.gameId;
+  const name = nameOf(req.data?.name);
+  const playerId = req.data?.playerId;
+
+  if (
+    typeof playerId !== 'string' ||
+    !/^[A-Za-z0-9_-]{16,80}$/.test(playerId)
+  ) {
+    throw new HttpsError('invalid-argument', 'Invalid player session.');
+  }
+
+  const ref = gameRef(id);
+  const rr = ref.collection('roster').doc(playerId);
+  const pr = ref.collection('privatePlayers').doc(playerId);
+
+  // Normalize names: ignore capitalization and extra whitespace.
+  const normalizedName = name.normalize('NFKC')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+
+  await db.runTransaction(async tx => {
+    const gs = await tx.get(ref);
+
+    if (!gs.exists) {
+      throw new HttpsError('not-found', 'Game not found.');
+    }
+
+    const [rs, ps, all] = await Promise.all([
+      tx.get(rr),
+      tx.get(pr),
+      tx.get(ref.collection('roster'))
+    ]);
+
+    // Allow an existing session to reconnect.
+    if (rs.exists && ps.exists && ps.data().uid === uid) return;
+
+    if (gs.data().status !== 'waiting') {
+      throw new HttpsError(
+        'failed-precondition',
+        'This game has already started.'
+      );
+    }
+
+    if (rs.exists || ps.exists) {
+      throw new HttpsError(
+        'already-exists',
+        'Player session already exists.'
+      );
+    }
+
+    // Prevent duplicate names, regardless of capitalization.
+    const duplicate = all.docs.some(doc => {
+      const existingName = String(doc.data().name || '')
+        .normalize('NFKC')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+
+      return existingName === normalizedName;
+    });
+
+    if (duplicate) {
+      throw new HttpsError(
+        'already-exists',
+        'That name is already taken. Please choose another name.'
+      );
+    }
+
+    if (all.size >= gs.data().maxPlayers) {
+      throw new HttpsError(
+        'resource-exhausted',
+        'The game is full.'
+      );
+    }
+
+    const order = all.docs.reduce(
+      (m, d) => Math.max(m, Number(d.data().joinedOrder) || 0),
+      0
+    ) + 1;
+
+    tx.set(rr, {
+      name,
+      joinedOrder: order,
+      joinedAt: FieldValue.serverTimestamp()
+    });
+
+    tx.set(pr, {
+      uid,
+      name,
+      role: null,
+      secretWord: null,
+      joinedOrder: order
+    });
+
+    tx.update(ref, {
+      playerCount: all.size + 1
+    });
+  });
+
+  return { joined: true, playerId };
+});
+
 exports.removePlayer=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId),id=req.data?.playerId;const game=await requireMayor(ref,uid);if(game.status!=='waiting')throw new HttpsError('failed-precondition','Players can only be removed before the game starts.');const rr=ref.collection('roster').doc(id),pr=ref.collection('privatePlayers').doc(id);await db.runTransaction(async tx=>{const [r,p,all]=await Promise.all([tx.get(rr),tx.get(pr),tx.get(ref.collection('roster'))]);if(!r.exists)throw new HttpsError('not-found','Player not found.');tx.delete(rr);if(p.exists)tx.delete(pr);tx.update(ref,{playerCount:Math.max(0,all.size-1)});});return{removed:true};});
 exports.startGame=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId);await db.runTransaction(async tx=>{const gs=await tx.get(ref);if(!gs.exists)throw new HttpsError('not-found','Game not found.');const g=gs.data();if(g.hostUid!==uid)throw new HttpsError('permission-denied','Only the Mayor can start the game.');if(g.status!=='waiting')throw new HttpsError('failed-precondition','Game already started.');const [rs,ss]=await Promise.all([tx.get(ref.collection('roster')),tx.get(ref.collection('hostSecret').doc('secret'))]);if(rs.size!==g.maxPlayers)throw new HttpsError('failed-precondition',`Waiting for all ${g.maxPlayers} players.`);if(!ss.exists)throw new HttpsError('internal','Secret word missing.');const roles=shuffle([...Array(g.seerCount).fill('Seer'),...Array(g.werewolfCount).fill('Werewolf'),...Array(g.villagerCount).fill('Villager')]);rs.docs.forEach((p,i)=>tx.update(ref.collection('privatePlayers').doc(p.id),{role:roles[i],secretWord:['Seer','Werewolf'].includes(roles[i])?ss.data().secretWord:null}));tx.update(ref,{status:'started',phase:'discussion',reconfiguring:false,votes:{},startedAt:FieldValue.serverTimestamp(),timerEndsAt:Timestamp.fromMillis(Date.now()+g.timerMinutes*60000),revealedWord:null});});return{started:true};});
 exports.endRound=onCall(async req=>{const uid=uidOf(req),ref=gameRef(req.data?.gameId),reason=req.data?.reason;if(!['time','tokens','word'].includes(reason))throw new HttpsError('invalid-argument','Invalid end reason.');const g=await requireMayor(ref,uid);if(g.status!=='started')throw new HttpsError('failed-precondition','The round is not active.');const ss=await ref.collection('hostSecret').doc('secret').get();await ref.update({status:reason==='word'?'guess_seer':'vote_werewolf',phase:reason==='word'?'guess_seer':'vote_werewolf',endReason:reason,revealedWord:ss.data().secretWord,endedAt:FieldValue.serverTimestamp(),votes:{}});return{ended:true};});

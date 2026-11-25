@@ -269,10 +269,6 @@ async function createGame(){
 async function joinGame(){
   const name=$("playerName").value.trim();
 
-  if(gameData && (gameData.playerCount||0)>=gameData.maxPlayers){
-    alert(`This game is full (${gameData.maxPlayers} players). The Mayor must remove a player or increase the role total first.`);
-    return;
-  }
   if(!name)return alert("Enter a player name.");
 
   $("joinGameBtn").disabled=true;
@@ -498,10 +494,9 @@ function renderHost(){
   $("startGameBtn").disabled=g.status!=="waiting"||(g.playerCount||0)!==g.maxPlayers||(newGameSetupMode&&!newGamePrepared);
 
   $("startGameBtn").classList.toggle("hidden",g.status!=="waiting"||(newGameSetupMode&&!newGamePrepared));
-  const atCapacity=(g.playerCount||0)>=g.maxPlayers;
+  $("addPlayerBtn").classList.toggle("hidden",g.status!=="waiting");
 
   $("hostActive").classList.toggle("hidden",!['started','vote_werewolf','guess_seer'].includes(g.status));
-  $("hostSecretBox").classList.toggle("hidden",g.status!=="waiting");
 
   $("hostEnd").classList.toggle("hidden",!['vote_werewolf','guess_seer'].includes(g.status));
 
@@ -605,12 +600,17 @@ function renderPlayerState(old){
   const g=gameData;
   const player=localPlayers[activeIndex];
 
+  if(old&&old.status!==g.status&&['vote_werewolf','guess_seer'].includes(g.status)){
+    playAnnouncement(g.endReason|| (g.status==='guess_seer'?'word':'time'));
+  }
+
+  // Keep the local-player switcher visible while waiting as well as during play.
+  renderLocalNav();
+
   if(g.status==='waiting'){
     $("waitingTitle").textContent="Waiting for the Mayor";
-    $('waitingText').textContent="Your player sessions are saved on this phone. Add another player here if multiple people are sharing this phone.";
-    const full=(g.playerCount||0)>=g.maxPlayers;
-    $("addAnotherPlayerBtn").classList.toggle("hidden",full);
-    $("addAnotherPlayerBtn").disabled=full;
+    $('waitingText').textContent="Your player sessions are saved on this phone. Use the buttons below to switch between players, or add another player.";
+    $("addAnotherPlayerBtn").classList.remove("hidden");
     show('playerWaiting');
     return;
   }
@@ -630,6 +630,9 @@ function renderPlayerState(old){
   const data=player.roleData;
 
   if(!data){
+    $("waitingTitle").textContent=`Waiting for ${player.name}`;
+    $("waitingText").textContent="This player's role will appear when the Mayor starts the game.";
+    $("addAnotherPlayerBtn").classList.add("hidden");
     show('playerWaiting');
     return;
   }
@@ -653,36 +656,43 @@ function renderPlayerState(old){
       :g.status==='guess_seer'
         ?'The word was discovered. Werewolves: identify the Seer.'
         :'';
-
-  renderLocalNav();
 }
 
 function renderLocalNav(){
-  const nav=$("localPlayerNav");
-  nav.innerHTML='';
+  const selected=localPlayers[activeIndex];
+  const containers=[$("waitingPlayerNav"),$("localPlayerNav")].filter(Boolean);
 
-  if(localPlayers.length>1){
-    const indicator=document.createElement('p');
-    indicator.className='small muted player-cycle-indicator';
-    indicator.textContent=`Player ${activeIndex+1} of ${localPlayers.length} · ${localPlayers[activeIndex]?.name||''}`;
+  containers.forEach(nav=>{
+    nav.innerHTML='';
+    nav.classList.toggle('hidden',localPlayers.length<=1);
 
-    const next=document.createElement('button');
-    next.className='secondary';
-    next.textContent='Hide role and pass to next player';
-    next.setAttribute('aria-label','Hide this role and show the next player');
-    next.onclick=()=>switchPlayer((activeIndex+1)%localPlayers.length);
+    if(localPlayers.length<=1||!selected)return;
 
     const prev=document.createElement('button');
+    prev.type='button';
     prev.className='secondary';
-    prev.textContent='Previous player';
+    prev.textContent='‹ Previous';
+    prev.setAttribute('aria-label','Previous player');
     prev.onclick=()=>switchPlayer((activeIndex-1+localPlayers.length)%localPlayers.length);
 
-    nav.append(indicator,next,prev);
-  }
+    const indicator=document.createElement('span');
+    indicator.className='player-nav-indicator';
+    indicator.textContent=`Player ${activeIndex+1} of ${localPlayers.length} · ${selected.name}`;
+
+    const next=document.createElement('button');
+    next.type='button';
+    next.className='secondary';
+    next.textContent='Next ›';
+    next.setAttribute('aria-label','Next player');
+    next.onclick=()=>switchPlayer((activeIndex+1)%localPlayers.length);
+
+    nav.append(prev,indicator,next);
+  });
 }
 
 function switchPlayer(i){
-  activeIndex=i;
+  if(!localPlayers.length)return;
+  activeIndex=(i+localPlayers.length)%localPlayers.length;
   roleVisible=false;
   renderPlayerState(null);
 }
@@ -771,16 +781,13 @@ $("copyLinkBtn").onclick=async()=>{
 };
 
 function openAddPlayer(){
-  if(gameData && (gameData.playerCount||0)>=gameData.maxPlayers){
-    alert(`This game is full (${gameData.maxPlayers} players). Remove a player or increase the role total before adding anyone.`);
-    return;
-  }
   $("playerName").value="";
   $("joinGameLabel").textContent=`Game ${gameId} · Add another player on this phone`;
   show("join");
   $("playerName").focus();
 }
 
+$("addPlayerBtn").onclick=openAddPlayer;
 $("addAnotherPlayerBtn").onclick=openAddPlayer;
 
 $("toggleRoleBtn").addEventListener("click",togglePlayerRole,{passive:false});
