@@ -269,6 +269,10 @@ async function createGame(){
 async function joinGame(){
   const name=$("playerName").value.trim();
 
+  if(gameData && (gameData.playerCount||0)>=gameData.maxPlayers){
+    alert(`This game is full (${gameData.maxPlayers} players). The Mayor must remove a player or increase the role total first.`);
+    return;
+  }
   if(!name)return alert("Enter a player name.");
 
   $("joinGameBtn").disabled=true;
@@ -494,7 +498,7 @@ function renderHost(){
   $("startGameBtn").disabled=g.status!=="waiting"||(g.playerCount||0)!==g.maxPlayers||(newGameSetupMode&&!newGamePrepared);
 
   $("startGameBtn").classList.toggle("hidden",g.status!=="waiting"||(newGameSetupMode&&!newGamePrepared));
-  $("addPlayerBtn").classList.toggle("hidden",g.status!=="waiting");
+  const atCapacity=(g.playerCount||0)>=g.maxPlayers;
 
   $("hostActive").classList.toggle("hidden",!['started','vote_werewolf','guess_seer'].includes(g.status));
   $("hostSecretBox").classList.toggle("hidden",g.status!=="waiting");
@@ -604,7 +608,9 @@ function renderPlayerState(old){
   if(g.status==='waiting'){
     $("waitingTitle").textContent="Waiting for the Mayor";
     $('waitingText').textContent="Your player sessions are saved on this phone. Add another player here if multiple people are sharing this phone.";
-    $("addAnotherPlayerBtn").classList.remove("hidden");
+    const full=(g.playerCount||0)>=g.maxPlayers;
+    $("addAnotherPlayerBtn").classList.toggle("hidden",full);
+    $("addAnotherPlayerBtn").disabled=full;
     show('playerWaiting');
     return;
   }
@@ -765,13 +771,16 @@ $("copyLinkBtn").onclick=async()=>{
 };
 
 function openAddPlayer(){
+  if(gameData && (gameData.playerCount||0)>=gameData.maxPlayers){
+    alert(`This game is full (${gameData.maxPlayers} players). Remove a player or increase the role total before adding anyone.`);
+    return;
+  }
   $("playerName").value="";
   $("joinGameLabel").textContent=`Game ${gameId} · Add another player on this phone`;
   show("join");
   $("playerName").focus();
 }
 
-$("addPlayerBtn").onclick=openAddPlayer;
 $("addAnotherPlayerBtn").onclick=openAddPlayer;
 
 $("toggleRoleBtn").addEventListener("click",togglePlayerRole,{passive:false});
