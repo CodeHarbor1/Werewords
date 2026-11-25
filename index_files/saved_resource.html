@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<!-- saved from url=(0189)https://codex-inline-visualization-0bf94aaa809d1c41.web-sandbox.oaiusercontent.com/?app=skybridge&locale=en-US&deviceType=desktop&unsafeSkipTargetOriginCheck=true&backgroundMode=transparent -->
+<html lang="en-US" class="transparentSkybridgeBackground desktopSkybridge light" data-theme="light" style="color-scheme: light; --safe-area-inset-top: 0px; --safe-area-inset-bottom: 0px; --safe-area-inset-left: 0px; --safe-area-inset-right: 0px;"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><style>@layer sandbox-defaults{html,body,#root{margin:0;padding:0}}</style>
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171923">
+  <title>Werewords</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./qrcode.min.js.download"></script><style>html, body, #root {
+      margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0;
+      
+    }
+html,body,#root{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}html,body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen,Ubuntu,Cantarell,Helvetica Neue,Arial,sans-serif!important}button,input,textarea,select{font-family:inherit}html{background-color:transparent}html.chatgptOled.dark,html.mobileSkybridge.dark{background-color:#000}@supports (font: -apple-system-body){html.mobileSkybridge{font:-apple-system-body}}html.desktopSkybridge.dark{background-color:#1e1e1e}html.transparentSkybridgeBackground,html.transparentSkybridgeBackground.dark{background-color:transparent}html.androidSkybridge,html.androidSkybridge body,html.androidSkybridge *{-webkit-tap-highlight-color:rgba(255,255,255,0)}html.androidSkybridge *::selection,html.androidSkybridge *::-moz-selection{background:#fff0;color:inherit}</style>
+
+  <style>
+    .role-count-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+    .role-counter { text-align: center; min-width: 0; }
+    .role-counter label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .counter-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .counter-btn {
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      border: none;
+      border-radius: 10px;
+      background: #343b50;
+      color: white;
+      font-size: 26px;
+      font-weight: bold;
+      cursor: pointer;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .counter-btn:active { background: #4b5d85; transform: scale(0.94); }
+    .counter-value {
+      min-width: 28px;
+      font-size: 23px;
+      font-weight: bold;
+      text-align: center;
+    }
+    .counter-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .role-total { text-align: center; margin: 16px 0 22px; }
+    @media (max-width: 380px) {
+      .role-count-grid { gap: 6px; }
+      .counter-controls { gap: 4px; }
+      .counter-btn { width: 36px; height: 40px; }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="shell">
+    <header>
+      <div class="eyebrow">A social deduction game</div>
+      <h1>Werewords</h1>
+      <p class="muted">One game. Everyone joins on their own phone.</p>
+    </header>
+
+    <section id="loading" class="panel">
+      <p>Connecting to the game…</p>
+    </section>
+
+    <section id="home" class="panel hidden">
+      <h2>Welcome, Mayor</h2>
+      <p class="muted">Create a game, choose the secret word, and share the QR code.</p>
+
+      <h3>Choose the roles</h3>
+      <p class="small muted">
+        The Mayor is not included. Total players are calculated from these role counts.
+      </p>
+
+      <div class="role-count-grid">
+        <div class="role-counter">
+          <label for="seerCountDisplay">Seers</label>
+          <div class="counter-controls">
+            <button type="button" class="counter-btn" data-counter="seerCount" data-change="-1" aria-label="Decrease Seers">−</button>
+            <span id="seerCountDisplay" class="counter-value" aria-live="polite">1</span>
+            <button type="button" class="counter-btn" data-counter="seerCount" data-change="1" aria-label="Increase Seers">+</button>
+          </div>
+          <input type="hidden" id="seerCount" value="1">
+        </div>
+
+        <div class="role-counter">
+          <label for="werewolfCountDisplay">Werewolves</label>
+          <div class="counter-controls">
+            <button type="button" class="counter-btn" data-counter="werewolfCount" data-change="-1" aria-label="Decrease Werewolves">−</button>
+            <span id="werewolfCountDisplay" class="counter-value" aria-live="polite">2</span>
+            <button type="button" class="counter-btn" data-counter="werewolfCount" data-change="1" aria-label="Increase Werewolves">+</button>
+          </div>
+          <input type="hidden" id="werewolfCount" value="2">
+        </div>
+
+        <div class="role-counter">
+          <label for="villagerCountDisplay">Villagers</label>
+          <div class="counter-controls">
+            <button type="button" class="counter-btn" data-counter="villagerCount" data-change="-1" aria-label="Decrease Villagers">−</button>
+            <span id="villagerCountDisplay" class="counter-value" aria-live="polite">5</span>
+            <button type="button" class="counter-btn" data-counter="villagerCount" data-change="1" aria-label="Increase Villagers">+</button>
+          </div>
+          <input type="hidden" id="villagerCount" value="5">
+        </div>
+      </div>
+
+      <p class="role-total">
+        Total players: <strong id="roleTotal" aria-live="polite">8</strong>
+      </p>
+
+      <label for="secretWord">Secret magic word</label>
+      <input type="text" id="secretWord" maxlength="80" placeholder="Enter the secret magic word">
+
+      <button id="createGameBtn">Create game</button>
+
+      <p class="small muted">
+        Game will randomly assign exactly the role counts you select.
+      </p>
+    </section>
+
+    <section id="join" class="panel hidden">
+      <h2>Join the game</h2>
+      <p id="joinGameLabel" class="muted"></p>
+      <label for="playerName">Your name</label>
+      <input id="playerName" maxlength="30" autocomplete="nickname" placeholder="Enter your name">
+      <button id="joinGameBtn">Join game</button>
+    </section>
+
+    <section id="hostLobby" class="panel hidden">
+      <span class="pill">Mayor's screen</span>
+      <h2>Game lobby</h2>
+      <p id="hostStatus" class="muted">Waiting for players…</p>
+      <div id="qrCode" class="qr"></div>
+      <p class="small muted">
+        Players scan this code with their own phones, or open the game link below.
+      </p>
+      <div class="copyrow">
+        <input id="gameLink" readonly="" aria-label="Game link">
+        <button id="copyLinkBtn" class="secondary">Copy</button>
+      </div>
+
+      <h3>Role distribution</h3>
+      <p id="hostRoleCounts" class="muted">1 Seer · 2 Werewolves · 5 Villagers</p>
+
+      <h3>Players <span id="playerTally" class="pill">0/8</span></h3>
+      <ol id="roster" class="roster"></ol>
+      <button id="startGameBtn" disabled="">Start game and assign roles</button>
+      <p class="small muted">
+        Starting assigns roles randomly. Players can only see their own role.
+      </p>
+
+      <div id="hostSecretArea" class="hidden secretbox">
+        <h3>Mayor's secret word</h3>
+        <p id="hostSecretWord" class="word"></p>
+      </div>
+    </section>
+
+    <section id="playerWaiting" class="panel hidden">
+      <span class="pill">You're in</span>
+      <h2 id="waitingTitle">Waiting for the Mayor</h2>
+      <p id="waitingText" class="muted">
+        Your name is in the lobby. Your role will appear here when the Mayor starts the game.
+      </p>
+      <div class="spinner" aria-hidden="true"></div>
+    </section>
+
+    <section id="playerRole" class="panel hidden">
+      <span class="pill">Your private role</span>
+      <h2 id="roleTitle">Your role</h2>
+      <p id="roleDescription" class="muted"></p>
+      <div id="roleWordArea" class="secretbox hidden">
+        <div class="small muted">Secret magic word</div>
+        <p id="roleWord" class="word"></p>
+      </div>
+      <p class="small muted">
+        Keep your screen private. Do not show your role or word to other players.
+      </p>
+    </section>
+
+    <section id="errorPanel" class="panel hidden">
+      <h2>Something went wrong</h2>
+      <p id="errorText"></p>
+      <button id="backHomeBtn" class="secondary">Back to home</button>
+    </section>
+
+    <footer>Werewords · Private roles · Random assignment</footer>
+  </main>
+
+  <script>
+    (() => {
+      const MIN_COUNT = 0;
+      const MAX_COUNT = 30;
+      const MIN_PLAYERS = 4;
+      const MAX_PLAYERS = 30;
+      const ROLE_IDS = ["seerCount", "werewolfCount", "villagerCount"];
+
+      let repeatDelay = null;
+      let repeatInterval = null;
+      let activeButton = null;
+
+      function updateRoleTotalFromHtml() {
+        const counts = ROLE_IDS.map(id => {
+          const input = document.getElementById(id);
+          return input ? Number(input.value) : NaN;
+        });
+
+        const valid = counts.every(Number.isInteger) &&
+          counts.every(value => value >= MIN_COUNT && value <= MAX_COUNT);
+
+        const total = valid ? counts.reduce((sum, value) => sum + value, 0) : 0;
+        const totalElement = document.getElementById("roleTotal");
+        const createButton = document.getElementById("createGameBtn");
+
+        if (totalElement) totalElement.textContent = String(total);
+
+        if (createButton) {
+          createButton.disabled = !valid ||
+            counts[1] < 1 ||
+            total < MIN_PLAYERS ||
+            total > MAX_PLAYERS;
+        }
+
+        document.querySelectorAll(".counter-btn").forEach(button => {
+          const input = document.getElementById(button.dataset.counter);
+          const value = input ? Number(input.value) : 0;
+          const change = Number(button.dataset.change);
+          button.disabled = (change < 0 && value <= MIN_COUNT) ||
+            (change > 0 && value >= MAX_COUNT);
+        });
+
+        // Also notify app.js. It listens for this event and runs its own validation.
+        document.dispatchEvent(new Event("rolecountschange"));
+      }
+
+      function stopRepeating() {
+        if (repeatDelay !== null) clearTimeout(repeatDelay);
+        if (repeatInterval !== null) clearInterval(repeatInterval);
+        repeatDelay = null;
+        repeatInterval = null;
+
+        if (activeButton && activeButton.hasPointerCapture?.(activeButton._pointerId)) {
+          activeButton.releasePointerCapture(activeButton._pointerId);
+        }
+        activeButton = null;
+      }
+
+      function changeCounter(id, amount) {
+        const input = document.getElementById(id);
+        const display = document.getElementById(id + "Display");
+        if (!input || !display) return;
+
+        const current = Number(input.value);
+        const safeCurrent = Number.isFinite(current) ? current : 0;
+        const next = Math.max(MIN_COUNT, Math.min(MAX_COUNT, safeCurrent + amount));
+
+        input.value = String(next);
+        display.textContent = String(next);
+        updateRoleTotalFromHtml();
+      }
+
+      document.querySelectorAll(".counter-btn").forEach(button => {
+        button.addEventListener("contextmenu", event => event.preventDefault());
+
+        button.addEventListener("pointerdown", event => {
+          event.preventDefault();
+          stopRepeating();
+
+          const id = button.dataset.counter;
+          const amount = Number(button.dataset.change);
+          if (!id || !Number.isFinite(amount) || button.disabled) return;
+
+          activeButton = button;
+          button._pointerId = event.pointerId;
+          button.setPointerCapture?.(event.pointerId);
+
+          changeCounter(id, amount);
+
+          repeatDelay = setTimeout(() => {
+            repeatInterval = setInterval(() => {
+              const input = document.getElementById(id);
+              const current = input ? Number(input.value) : 0;
+              if ((amount < 0 && current <= MIN_COUNT) ||
+                  (amount > 0 && current >= MAX_COUNT)) {
+                stopRepeating();
+                return;
+              }
+              changeCounter(id, amount);
+            }, 120);
+          }, 400);
+        });
+
+        button.addEventListener("pointerup", stopRepeating);
+        button.addEventListener("pointercancel", stopRepeating);
+        button.addEventListener("lostpointercapture", stopRepeating);
+      });
+
+      window.addEventListener("pointerup", stopRepeating);
+      window.addEventListener("blur", stopRepeating);
+
+      // Initialize the displayed total and button states on page load.
+      updateRoleTotalFromHtml();
+    })();
+  </script>
+
+  <script type="module" src="./app.js.download"></script>
+
+<script>globalThis.__codexVisualizationInitialGlobals={"statePersistence":"none","stateModelContext":"none","visualizationStyleVariables":{"--accent":"rgb(232, 243, 254)","--accent-foreground":"rgb(44, 103, 197)","--background":"rgb(252, 252, 252)","--border":"rgba(0, 0, 0, 0.1)","--border-strong":"rgba(0, 0, 0, 0.15)","--card":"color-mix(in oklab, rgb(13, 13, 13) 5%, transparent)","--card-foreground":"rgb(13, 13, 13)","--corner-shape":"round","--control-spacing":"12px","--cursor-interaction":"pointer","--destructive":"rgb(146, 59, 15)","--font-mono":"ui-monospace, SFMono-Regular, \"SF Mono\", menlo, consolas, \"Liberation Mono\", monospace","--font-sans":"-apple-system-body, ui-sans-serif, -apple-system, system-ui, \"Segoe UI\", Helvetica, \"Apple Color Emoji\", Arial, sans-serif, \"Segoe UI Emoji\", \"Segoe UI Symbol\"","--font-size-base":"16px","--font-weight-normal":"400","--foreground":"rgb(13, 13, 13)","--input":"rgba(0, 0, 0, 0.15)","--muted":"color-mix(in srgb, rgb(13, 13, 13) 10%, transparent)","--muted-foreground":"rgb(143, 143, 143)","--popover":"rgb(255, 255, 255)","--popover-foreground":"rgb(13, 13, 13)","--primary":"rgb(44, 103, 197)","--primary-foreground":"rgb(255, 255, 255)","--radius":"8px","--radius-2xl":"16px","--radius-lg":"8px","--radius-md":"6px","--radius-sm":"4px","--ring":"rgb(1, 105, 204)","--secondary":"rgb(243, 243, 243)","--secondary-foreground":"rgb(13, 13, 13)","--blue":"rgb(2, 133, 255)","--orange":"rgb(251, 106, 34)","--green":"rgb(4, 184, 76)","--red":"rgb(250, 66, 62)","--purple":"rgb(146, 79, 247)","--yellow":"rgb(255, 195, 0)","--visualize-paint-gutter":"0px","--viz-series-1":"rgb(44, 103, 197)","--viz-series-2":"#f2893c","--viz-series-3":"#5ec978","--viz-series-4":"#ea77b0","--viz-series-5":"#9a7aeb","--viz-series-6":"#3db9b0"},"visualizationTheme":"light"};</script>
+<style id="codex-visualization-host-theme">
+:root {}
+</style>
+<script>
+(() => {
+  // Host colors are defaults; later authored styles can give the same names
+  // their own meaning (for example, --muted as a chart's label color).
+  const hostStyles = document.getElementById("codex-visualization-host-theme");
+  const hostStyle = hostStyles.sheet.cssRules[0].style;
+  // Typography, geometry and interaction cursors still follow the host.
+  const styleForProperty = (property) =>
+    /^--(?:font-|radius|corner-shape$|control-spacing$|cursor-interaction$|icon-size$|page-content-inline-inset$|page-header-clearance$|visualize-paint-gutter$)/.test(property)
+      ? document.documentElement.style
+      : hostStyle;
+  const initialGlobals =
+    globalThis.__codexVisualizationInitialGlobals ?? globalThis.openai;
+  delete globalThis.__codexVisualizationInitialGlobals;
+  if (initialGlobals?.statePersistence != null) {
+    globalThis.openai ??= {};
+    globalThis.openai.statePersistence = initialGlobals.statePersistence;
+    globalThis.openai.stateModelContext = initialGlobals.stateModelContext ?? "none";
+  }
+  if (!false) {
+    return;
+  }
+  let appliedProperties = [];
+  const applyHostStyleVariables = (styleVariables) => {
+    if (styleVariables == null || typeof styleVariables !== "object") {
+      return;
+    }
+    document.documentElement.toggleAttribute(
+      "data-visualize-page-inline-inset", typeof styleVariables["--page-content-inline-inset"] === "string",
+    );
+    document.documentElement.toggleAttribute(
+      "data-visualize-page-header", typeof styleVariables["--page-header-clearance"] === "string",
+    );
+    document.documentElement.toggleAttribute(
+      "data-visualize-live", typeof styleVariables["--font-line-height-base"] === "string",
+    );
+    for (const property of appliedProperties) {
+      styleForProperty(property).removeProperty(property);
+    }
+    appliedProperties = [];
+    for (const [property, value] of Object.entries(styleVariables)) {
+      if (property.startsWith("--") && typeof value === "string") {
+        styleForProperty(property).setProperty(property, value);
+        appliedProperties.push(property);
+      }
+    }
+  };
+
+  const syncHostStyles = (globals) => {
+    applyHostStyleVariables(globals?.visualizationStyleVariables);
+    if (globals?.visualizationTheme != null) {
+      hostStyles.dataset.visualizationTheme = globals.visualizationTheme;
+    }
+    const sandboxDocument = globalThis.frameElement?.ownerDocument;
+    if (sandboxDocument != null && globals?.visualizationTheme != null) {
+      let colorSchemeMeta = sandboxDocument.querySelector(
+        'meta[name="color-scheme"]',
+      );
+      if (colorSchemeMeta == null) {
+        colorSchemeMeta = sandboxDocument.createElement("meta");
+        colorSchemeMeta.name = "color-scheme";
+        sandboxDocument.head.appendChild(colorSchemeMeta);
+      }
+      colorSchemeMeta.content = globals.visualizationTheme;
+      sandboxDocument.documentElement.style.colorScheme =
+        globals.visualizationTheme;
+      // Paint the host surface behind transparent saved visualization documents.
+      sandboxDocument.documentElement.style.backgroundColor =
+        hostStyle.getPropertyValue("--background");
+    }
+  };
+
+  syncHostStyles(initialGlobals);
+  globalThis.addEventListener("openai:set_globals", (event) => {
+    syncHostStyles(event.detail?.globals);
+  });
+})();
+</script>
+
+
+<script>
+(() => {
+  const reportEnvironmentError = (value) => {
+    const error = value instanceof Error ? value : new Error(String(value));
+    void globalThis.openai
+      .callTool(
+        "__codex_inline_visualization_error__",
+        {
+          message: error.message,
+          name: error.name,
+          stack: error.stack,
+        },
+      )
+      .catch(() => {});
+  };
+  const scriptSourceForRepair = (source) => {
+    if (!source) { return ""; }
+    try {
+      const base = new globalThis.URL("https://visualization.invalid/");
+      const url = new globalThis.URL(source, base);
+      if (url.protocol !== "http:" && url.protocol !== "https:") {
+        return url.protocol;
+      }
+      url.username = "";
+      url.password = "";
+      url.search = "";
+      url.hash = "";
+      if (url.origin === base.origin && !source.startsWith("//")) {
+        return url.pathname;
+      }
+      return url.href;
+    } catch {
+      return "";
+    }
+  };
+
+  globalThis.addEventListener("error", (event) => {
+    if (event.target?.localName === "script") {
+      // A script's own onerror may render a fallback or load an alternative.
+      // Let that handler run; failures it throws still reach the global error path.
+      const handlesError = typeof event.target.onerror === "function";
+      globalThis.queueMicrotask(() => {
+        if (!handlesError && !event.defaultPrevented) {
+          const source = scriptSourceForRepair(
+            event.target.getAttribute("src")?.trim().slice(0, 2048),
+          );
+          const error = new Error(source
+            ? "Visualization script could not be loaded: " + source
+            : "Visualization script could not be loaded");
+          error.name = "VisualizationScriptLoadError";
+          reportEnvironmentError(error);
+        }
+      });
+    } else if (event.target === globalThis) {
+      // The browser defers resize notifications to another frame; no script threw.
+      if (event.error == null && (
+        event.message === "ResizeObserver loop completed with undelivered notifications." ||
+        event.message === "ResizeObserver loop limit exceeded"
+      )) {
+        return;
+      }
+      reportEnvironmentError(event.error ?? event.message);
+    }
+  }, true);
+  globalThis.addEventListener("unhandledrejection", (event) => {
+    reportEnvironmentError(event.reason);
+  });
+})();
+</script>
+<script id="codex-visualization-variants">
+(() => {
+  let previousSnapshot = "[]";
+  let roots = [];
+  const report = () => {
+    roots = Array.from(
+      document.querySelectorAll(".viz-carousel[data-active-variant]"),
+    ).slice(0, 32);
+    const selectedVariants = roots.flatMap((root, carousel) => {
+      const variant = root.dataset.activeVariant;
+      const label = root.getAttribute("aria-label")?.slice(0, 256);
+      return variant ? [{
+        carousel,
+        ...(label == null ? {} : { label }),
+        variant: variant.slice(0, 256),
+      }] : [];
+    });
+    const snapshot = JSON.stringify(selectedVariants);
+    if (snapshot !== previousSnapshot) {
+      previousSnapshot = snapshot;
+      void globalThis.openai.callTool("__codex_visualization_annotations__", {
+        type: "variants",
+        selectedVariants,
+      }).catch(() => {});
+    }
+  };
+  const observer = new MutationObserver((records) => {
+    if (records.some((record) => record.type === "attributes") || roots.some((root) => !root.isConnected)) {
+      report();
+    }
+  });
+  observer.observe(document, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["data-active-variant"],
+  });
+  report();
+  globalThis.addEventListener("pagehide", () => observer.disconnect(), { once: true });
+})();
+</script>
+<script>
+(() => {
+  const selectorInRoot = (target, root) => {
+    const parts = [];
+    for (let element = target; element != null && parts.length < 64; element = element.parentElement) {
+      const id = element.id && globalThis.CSS?.escape?.(element.id);
+      if (id && id.length <= 256) {
+        const selector = ["#" + id, ...parts].join(" > ");
+        const matches = root.querySelectorAll(selector);
+        if (matches.length === 1 && matches[0] === target) {
+          return selector;
+        }
+      }
+      let index = 1;
+      for (let sibling = element.previousElementSibling; sibling != null; sibling = sibling.previousElementSibling) {
+        if (sibling.localName === element.localName) { index += 1; }
+      }
+      const tag = globalThis.CSS?.escape?.(element.localName) ?? element.localName;
+      parts.unshift(tag + ":nth-of-type(" + index + ")");
+      if (parts.join(" > ").length > 1024) { return null; }
+      if (element.parentElement == null) {
+        const selector = parts.join(" > ");
+        const matches = root.querySelectorAll(selector);
+        return matches.length === 1 && matches[0] === target ? selector : null;
+      }
+    }
+    return null;
+  };
+  const describeTarget = (element) => {
+    if (element == null || !element.isConnected) { return undefined; }
+    const tagName = element.localName.toLowerCase();
+    if (!/^[a-z][a-z0-9-]{0,63}$/.test(tagName)) { return undefined; }
+    const parts = [];
+    let current = element;
+    for (let depth = 0; depth < 16; depth += 1) {
+      const root = current.getRootNode();
+      const selector = selectorInRoot(current, root);
+      if (selector == null) { return undefined; }
+      parts.unshift(selector);
+      if (root === document) {
+        const selector = parts.length === 1 ? parts[0] : "shadow:" + parts.join(">>>");
+        if (selector.length > 1024) { return undefined; }
+        const label = (element.getAttribute("aria-label") || element.getAttribute("title") || "")
+          .replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028-\u202e\u2066-\u2069]/gu, " ")
+          .replace(/\s+/g, " ").trim().slice(0, 160);
+        return { selector, tagName, ...(label ? { label } : {}) };
+      }
+      if (!(root instanceof ShadowRoot) || root.mode !== "open") { return undefined; }
+      current = root.host;
+    }
+    return undefined;
+  };
+  let previousSnapshot = JSON.stringify({ isHovering: false });
+  const reportHover = (event, isHovering, isTouch = false, target) => {
+    const report = isTouch
+      ? { isHovering: false, pointerType: "touch" }
+      : { isHovering, ...(isHovering && target != null ? { target } : {}) };
+    const snapshot = JSON.stringify(report);
+    if (snapshot === previousSnapshot) {
+      return;
+    }
+    previousSnapshot = snapshot;
+    void globalThis.openai
+      .callTool(
+        "__codex_inline_visualization_hover__",
+        { ...report, eventTime: globalThis.performance.timeOrigin + event.timeStamp },
+      )
+      .catch(() => {});
+  };
+
+  let hoveredElement;
+  let isTouchHover = false;
+  let latestHover = null;
+  let latestResetTime = 0;
+  const handlePointerHover = (event) => {
+    const isTouch = event.pointerType === "touch";
+    const element = isTouch ? undefined : event.composedPath().find((element) => element instanceof Element);
+    latestHover = { event, element, isTouch };
+    if (event.type === "pointermove" && element === hoveredElement && isTouch === isTouchHover) {
+      return;
+    }
+    hoveredElement = element;
+    isTouchHover = isTouch;
+    reportHover(event, !isTouch, isTouch, isTouch ? undefined : describeTarget(element));
+  };
+  const clearHover = (event) => {
+    hoveredElement = undefined;
+    isTouchHover = false;
+    latestHover = null;
+    reportHover(event, false);
+  };
+  globalThis.addEventListener("openai:set_globals", (event) => {
+    const resetTime = event.detail?.globals?.visualizationHoverReset;
+    if (typeof resetTime !== "number" || !Number.isFinite(resetTime) || resetTime <= latestResetTime) {
+      return;
+    }
+    latestResetTime = resetTime;
+    const latest = latestHover;
+    hoveredElement = undefined;
+    isTouchHover = false;
+    latestHover = null;
+    previousSnapshot = JSON.stringify({ isHovering: false });
+    // A host-observed exit can arrive after the pointer has already reentered.
+    if (latest != null && globalThis.performance.timeOrigin + latest.event.timeStamp > resetTime) {
+      latestHover = latest;
+      hoveredElement = latest.element;
+      isTouchHover = latest.isTouch;
+      reportHover(latest.event, !latest.isTouch, latest.isTouch,
+        latest.isTouch ? undefined : describeTarget(latest.element));
+    }
+  });
+  globalThis.addEventListener("pointerover", handlePointerHover, { capture: true });
+  // Moves between descendants in one shadow root do not emit pointerover outside
+  // that root. The identity guard avoids selector work while a target is unchanged.
+  globalThis.addEventListener("pointermove", handlePointerHover, { capture: true });
+  globalThis.addEventListener(
+    "pointerout",
+    (event) => {
+      if (event.pointerType !== "touch" && event.relatedTarget == null) {
+        clearHover(event);
+      }
+    },
+    { capture: true },
+  );
+  globalThis.addEventListener("pagehide", clearHover);
+})();
+</script>
+<script>
+(() => {
+  const report = (method) => {
+    void globalThis.openai.callTool("__codex_inline_visualization_input__", { method }).catch(() => {});
+  };
+  globalThis.addEventListener("pointerdown", () => report("pointer"), { capture: true });
+  globalThis.addEventListener("keydown", (event) => {
+    if (!event.isComposing && event.key !== "Shift" && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      report(["Tab","ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key) ? "keyboard-navigation" : "keyboard");
+    }
+  }, { capture: true });
+})();
+</script>
+<script>
+(() => {
+  const bubbledClicks = new WeakSet();
+  const interactiveSelector = [
+    "button", "input", "select", "textarea", "label", "summary", "a[href]",
+    "audio[controls]", "video[controls]", "[onclick]", "[data-visualization-interactive]",
+    '[contenteditable]:not([contenteditable="false"])',
+    ...[
+      "button", "checkbox", "combobox", "gridcell", "link", "listbox",
+      "menuitem", "menuitemcheckbox", "menuitemradio", "option", "radio",
+      "scrollbar", "searchbox", "slider", "spinbutton", "switch", "tab",
+      "textbox", "treeitem",
+    ].map((role) => '[role~="' + role + '"]'),
+  ].join(",");
+
+  globalThis.addEventListener("click", (event) => bubbledClicks.add(event));
+  globalThis.addEventListener("click", (event) => {
+    // Capture the path before a control can remove itself. Custom delegated
+    // controls can opt in with data-visualization-interactive.
+    const elements = event.composedPath().filter((target) => target instanceof Element);
+    const control = elements.find((element) => element.matches(interactiveSelector));
+    const widgetControl = event.isTrusted && control != null &&
+      !control.matches('img, [role~="img"]') &&
+      !elements.some((element) => element.matches('a[href], [role~="link"]'));
+    const isInteractiveTarget = control != null || elements.some((element) =>
+      element.hasAttribute("tabindex") && element.tabIndex >= 0) ||
+      (elements[0] != null && getComputedStyle(elements[0]).cursor === "pointer");
+    // Use a task, not a microtask: native dispatch can run microtasks between
+    // listeners. Propagation flags are reset when dispatch finishes:
+    // https://dom.spec.whatwg.org/#concept-event-dispatch
+    globalThis.setTimeout(() => {
+      void globalThis.openai.callTool("__codex_inline_visualization_click__", {
+        ...(widgetControl ? {widgetControl: true} : {}),
+        isInteractive: isInteractiveTarget || event.defaultPrevented ||
+          (event.bubbles && !bubbledClicks.has(event)),
+      }).catch(() => {});
+    }, 0);
+  }, { capture: true });
+})();
+</script>
+<script>
+(() => {
+  globalThis.addEventListener("keydown", (event) => {
+    if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey ||
+      event.shiftKey || !["ArrowLeft", "ArrowRight", "Escape"].includes(event.key)) {
+      return;
+    }
+    const target = event.composedPath().find((element) => element instanceof HTMLElement);
+    const editable = target?.closest("[contenteditable]");
+    const editing = target && (target.isContentEditable ||
+      (editable && editable.getAttribute("contenteditable") !== "false") ||
+      target.closest('input, textarea, select, [role="slider"], [role="spinbutton"], [role="combobox"], [role="listbox"], [role="grid"], [role="tree"], [role="tablist"], [role="menu"]'));
+    if (event.key !== "Escape" && editing) { return; }
+    // Let the widget handle the key before forwarding it across the sandbox.
+    globalThis.setTimeout(() => {
+      if (!event.defaultPrevented && globalThis.openai?.displayMode === "fullscreen") {
+        void globalThis.openai.callTool("__codex_inline_visualization_preview_key__", {
+          key: event.key,
+        }).catch(() => {});
+      }
+    }, 0);
+  });
+})();
+</script>
+
+
+
+
+
+
+
+
+<script>
+(() => {
+  const contentRange = document.createRange();
+  let waitingForStreamRoot = false ? document.querySelector("main") : null;
+  const markStreamReady = () => {
+    waitingForStreamRoot = null;
+    globalThis.removeEventListener("openai:set_globals", onStreamGlobals);
+    void globalThis.openai.callTool("__codex_inline_visualization_ready__", {}).catch(() => {});
+  };
+  const onStreamGlobals = (event) => {
+    const update = event.detail?.globals?.__appBlockStream;
+    if (update?.isFinal) {
+      markStreamReady();
+    } else if (update != null) {
+      scheduleHeightReport();
+    }
+  };
+  const measureChild = (child, bodyStyle) => {
+    const rect = child.getBoundingClientRect();
+    // Child margins can collapse above the root without adding to its height.
+    // The host adds body padding separately.
+    return Math.max(child.scrollHeight, rect.height) + Math.max(
+      0,
+      rect.top - document.body.getBoundingClientRect().top - parseFloat(bodyStyle.paddingTop),
+    );
+  };
+  let previousMeasurement = null;
+  let lastReportedHeight;
+  let heightReportTimer = null;
+  const reportHeight = () => {
+    const bodyChildren = Array.from(document.body.children).filter(
+      (element) =>
+        element.tagName !== "SCRIPT" &&
+        element.tagName !== "STYLE" &&
+        element.getAttribute("role") !== "tooltip",
+    );
+    const bodyStyle = globalThis.getComputedStyle(document.body);
+    const viewportWidth = globalThis.innerWidth;
+    const contentWidth = Math.max(
+      0,
+      Math.round(
+        viewportWidth -
+          parseFloat(bodyStyle.paddingLeft) -
+          parseFloat(bodyStyle.paddingRight),
+      ),
+    );
+    let contentHeight;
+    if (bodyChildren.length === 0) {
+      contentRange.selectNodeContents(document.body);
+      contentHeight = contentRange.getBoundingClientRect().height;
+    } else if (bodyChildren.length === 1) {
+      contentHeight = measureChild(bodyChildren[0], bodyStyle);
+    } else {
+      const bodyTop = document.body.getBoundingClientRect().top;
+      contentHeight = Math.max(
+        ...bodyChildren.map(
+          (bodyChild) => bodyChild.getBoundingClientRect().bottom - bodyTop,
+        ),
+      );
+    }
+    // A short first line is drawable before the chart is tall enough for a graphical preview.
+    // Check before deduplicating height: text can arrive inside a fixed-height empty box.
+    if (waitingForStreamRoot != null && contentWidth > 0 && (
+      contentHeight >= 32 ||
+      (contentHeight > 0 && waitingForStreamRoot.innerText.trim() !== "")
+    )) {
+      markStreamReady();
+    }
+    const viewportHeight = globalThis.innerHeight;
+    const previous = previousMeasurement;
+    const sameWidth = viewportWidth === previous?.viewportWidth && contentWidth === previous.contentWidth;
+    // At fractional zoom, innerHeight and CSS heights can round a pixel apart.
+    const matchesViewport = (height) => Math.abs(height - viewportHeight) <= 1;
+    const root = bodyChildren.length === 1 ? bodyChildren[0] : null;
+    const minimum = root && parseFloat(globalThis.getComputedStyle(root).minHeight);
+    let initialMinimum = matchesViewport(minimum) ? minimum : null;
+    let tracksViewportHeight = false;
+    if (
+      lastReportedHeight > 0 &&
+      initialMinimum != null &&
+      root === previous?.root &&
+      previous.initialMinimum != null
+    ) {
+      const gutter = 2 * parseFloat(bodyStyle.getPropertyValue("--visualize-paint-gutter"));
+      // Keep the same minimum while waiting for the host to resize the frame
+      // and when it acknowledges our height with the paint gutter added.
+      if (gutter > 0 && (
+        viewportHeight === previous.viewportHeight ||
+        matchesViewport(Math.ceil(lastReportedHeight) + gutter)
+      )) {
+        initialMinimum = previous.initialMinimum;
+        // A width-based minimum can match the viewport during a drag. Wait
+        // for a height-only resize before treating the match as feedback.
+        tracksViewportHeight = previous.tracksViewportHeight ||
+          (sameWidth && !matchesViewport(previous.viewportHeight));
+      }
+    }
+    previousMeasurement = {
+      contentHeight, contentWidth, viewportHeight, viewportWidth, root, initialMinimum, tracksViewportHeight,
+    };
+
+    // Measure wrapped content at the original minimum. Also correct any
+    // growth reported before the first height-only resize.
+    if (tracksViewportHeight && !matchesViewport(initialMinimum) && matchesViewport(contentHeight)) {
+      if (sameWidth && (previous.tracksViewportHeight || previous.viewportHeight === initialMinimum)) {
+        return;
+      }
+      const authoredStyle = root.getAttribute("style");
+      root.setAttribute("style", root.style.cssText + " min-height: " + initialMinimum + "px !important;");
+      try {
+        contentHeight = measureChild(root, bodyStyle);
+      } finally {
+        if (authoredStyle == null) {
+          root.removeAttribute("style");
+        } else {
+          root.setAttribute("style", authoredStyle);
+        }
+      }
+      if (sameWidth && contentHeight === lastReportedHeight) {
+        return;
+      }
+    } else if (
+      sameWidth &&
+      contentHeight - previous.contentHeight === viewportHeight - previous.viewportHeight
+    ) {
+      return;
+    }
+    lastReportedHeight = contentHeight;
+    void globalThis.openai
+      .callTool(
+        "__codex_inline_visualization_height__",
+        { height: contentHeight, width: contentWidth },
+      )
+      .catch(() => {});
+  };
+  const scheduleHeightReport = () => {
+    if (heightReportTimer != null) {
+      return;
+    }
+    // Offscreen frames can suspend animation callbacks while their content loads.
+    heightReportTimer = globalThis.setTimeout(() => {
+      heightReportTimer = null;
+      reportHeight();
+    }, 0);
+  };
+
+  const resizeObserver = new ResizeObserver(scheduleHeightReport);
+  const observeBodyChildren = () => {
+    for (const element of document.body.children) {
+      resizeObserver.observe(element);
+    }
+  };
+  resizeObserver.observe(document.body);
+  observeBodyChildren();
+  new MutationObserver(() => {
+    observeBodyChildren();
+    scheduleHeightReport();
+  }).observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["style", "class", "height", "width"],
+  });
+  globalThis.addEventListener("resize", scheduleHeightReport);
+  if (waitingForStreamRoot != null) {
+    globalThis.addEventListener("openai:set_globals", onStreamGlobals);
+    if (globalThis.openai?.__appBlockStream?.isFinal) {
+      markStreamReady();
+    }
+  }
+  reportHeight();
+})();
+</script>
+<style>
+html, body {
+  scrollbar-width: none !important;
+  
+}
+html::-webkit-scrollbar, body::-webkit-scrollbar { display: none !important; }
+</style>
+
+
+</body></html>
