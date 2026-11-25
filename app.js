@@ -84,13 +84,22 @@ function route(){
   gameId=new URLSearchParams(location.search).get("game");
 
   if(gameId){
+    isHost=localStorage.getItem(`werewords:${gameId}:host")==="1";
     localPlayers=restorePlayers();
     $("joinGameLabel").textContent=`Game code: ${gameId}`;
-    show(localPlayers.length?"playerWaiting":"join");
 
+    // Restore the Mayor screen after a browser refresh.
+    if(isHost){
+      show("loading");
+      loadHost();
+      return;
+    }
+
+    show(localPlayers.length?"playerWaiting":"join");
     watchPlayers();
     watchGame();
   }else{
+    isHost=false;
     show("home");
   }
 }
@@ -253,6 +262,7 @@ async function createGame(){
     gameId=r.gameId;
     isHost=true;
     localPlayers=[];
+    localStorage.setItem(`werewords:${gameId}:host`,"1");
 
     history.replaceState({},"",`${location.pathname}?game=${gameId}`);
 
@@ -469,6 +479,12 @@ function watchGame(){
     const old=gameData;
     gameData=snap.data();
 
+    // Refresh player devices after roles are assigned, but never reload the Mayor.
+    if(old?.status==="waiting" && gameData.status==="started" && !isHost){
+      window.location.reload();
+      return;
+    }
+
     if(isHost)renderHost();
     else renderPlayerState(old);
 
@@ -596,14 +612,21 @@ function tick(){
 }
 
 async function startGame(){
+  const button=$("startGameBtn");
+  if(button){button.disabled=true;button.textContent="Starting game…";}
   try{
+    // The callable resolves only after Firebase has committed the role assignments
+    // and changed the game status. Reload so the Mayor's device fetches fresh state.
     await call("startGame",{gameId});
     newGameSetupMode=false;
     newGamePrepared=false;
+    location.reload();
   }catch(e){
+    if(button){button.disabled=false;button.textContent="Start Game";}
     alert(errorText(e));
   }
 }
+
 async function endRound(reason){
   if(endingRound)return;
 
@@ -716,7 +739,7 @@ function renderLocalNav(){
 
     const next=document.createElement('button');
     next.className='secondary';
-    next.textContent='Next player';
+    next.textContent='Hide role and pass to next player';
     next.setAttribute('aria-label','Hide this role and show the next player');
     next.onclick=()=>switchPlayer((activeIndex+1)%localPlayers.length);
 
@@ -850,8 +873,10 @@ $("rerollWordsBtn").onclick=rerollWords;
 
 $("backHomeBtn").onclick=()=>{
   clearSubs();
+  if(gameId)localStorage.removeItem(`werewords:${gameId}:host`);
   history.replaceState({},'',location.pathname);
   gameId=null;
+  isHost=false;
   localPlayers=[];
   show('home');
 };
