@@ -596,21 +596,14 @@ function tick(){
 }
 
 async function startGame(){
-  const button=$("startGameBtn");
-  if(button){button.disabled=true;button.textContent="Starting game…";}
   try{
-    // The callable resolves only after Firebase has committed the role assignments
-    // and changed the game status. Reload so the Mayor's device fetches fresh state.
     await call("startGame",{gameId});
     newGameSetupMode=false;
     newGamePrepared=false;
-    location.reload();
   }catch(e){
-    if(button){button.disabled=false;button.textContent="Start Game";}
     alert(errorText(e));
   }
 }
-
 async function endRound(reason){
   if(endingRound)return;
 
