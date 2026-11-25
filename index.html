@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
-    .hidden{display:none!important}.role-count-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}.role-counter{text-align:center}.counter-controls{display:flex;align-items:center;justify-content:center;gap:8px}.counter-btn{width:42px;height:42px;padding:0;border:0;border-radius:10px;background:#343b50;color:white;font-size:25px;font-weight:bold;touch-action:manipulation}.counter-value{min-width:25px;font-size:22px;font-weight:bold}.counter-btn:disabled{opacity:.35}.role-total{text-align:center;margin:14px 0}.category-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.category-grid label{display:flex;gap:8px;align-items:center;padding:8px;background:#30394d;border-radius:8px}.category-grid input{width:auto}.qr{display:flex;justify-content:center;background:white;padding:12px;width:max-content;margin:16px auto}.copyrow{display:flex;gap:8px}.copyrow input{min-width:0;flex:1}.copyrow button{width:auto}.roster li{padding:6px 0}.roster .remove{width:auto;margin-left:10px}.secretbox{padding:16px;background:#171d2b;border:1px solid #53617c;border-radius:12px;margin:14px 0}.word{text-align:center;font-size:2rem;font-weight:800}.timer{text-align:center;font-size:3rem;font-weight:800;font-variant-numeric:tabular-nums}.status{padding:12px;background:#303b53;border-radius:10px}.end-word{font-size:2.5rem}.counter-match{font-size:.9rem;color:#aeb8cc}@media(max-width:380px){.role-count-grid{gap:5px}.counter-controls{gap:3px}.counter-btn{width:35px;height:39px}.category-grid{grid-template-columns:1fr}}
+    .hidden{display:none!important}.role-count-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}.role-counter{text-align:center}.counter-controls{display:flex;align-items:center;justify-content:center;gap:8px}.counter-btn{width:42px;height:42px;padding:0;border:0;border-radius:10px;background:#343b50;color:white;font-size:25px;font-weight:bold;touch-action:manipulation}.counter-value{min-width:25px;font-size:22px;font-weight:bold}.counter-btn:disabled{opacity:.35}.role-total{text-align:center;margin:14px 0}.category-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.category-grid label{display:flex;gap:8px;align-items:center;padding:8px;background:#30394d;border-radius:8px}.category-grid input{width:auto}.qr{display:flex;justify-content:center;background:white;padding:12px;width:max-content;margin:16px auto}.copyrow{display:flex;gap:8px}.copyrow input{min-width:0;flex:1}.copyrow button{width:auto}.roster li{padding:6px 0}.roster .remove{width:auto;margin-left:10px}.secretbox{padding:16px;background:#171d2b;border:1px solid #53617c;border-radius:12px;margin:14px 0}.host-secret-box{background:linear-gradient(135deg,#302746,#1c2436);border:2px solid #f0c75e;box-shadow:0 0 0 3px rgba(240,199,94,.16),0 10px 28px rgba(0,0,0,.25);padding:22px}.host-secret-box .small{color:#f4d889;text-align:center;font-weight:800;letter-spacing:.08em;text-transform:uppercase}.host-secret-box .word{color:#fff3c4;font-size:clamp(2.2rem,7vw,3.4rem);text-shadow:0 2px 14px rgba(240,199,94,.28);overflow-wrap:anywhere}.word{text-align:center;font-size:2rem;font-weight:800}.timer{text-align:center;font-size:3rem;font-weight:800;font-variant-numeric:tabular-nums}.status{padding:12px;background:#303b53;border-radius:10px}.end-word{font-size:2.5rem}.counter-match{font-size:.9rem;color:#aeb8cc}@media(max-width:380px){.role-count-grid{gap:5px}.counter-controls{gap:3px}.counter-btn{width:35px;height:39px}.category-grid{grid-template-columns:1fr}}
     /* Larger, easier-to-tap controls on phones and tablets. Keep role counters compact. */
     button:not(.counter-btn):not(.remove) {
       min-height: 60px;
@@ -18,8 +18,7 @@
       touch-action: manipulation;
     }
     button.remove { min-height: 42px; padding: 9px 12px; font-size: .95rem; }
-    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
-    .player-cycle-indicator { flex-basis: 100%; text-align: center; margin: 4px 0; }
+    .actions { display: flex; gap: 10px; }
     .actions button { flex: 1; }
     #toggleRoleBtn { min-height: 68px; font-size: 1.2rem; }
     @media (max-width: 600px) {
@@ -27,6 +26,105 @@
       #toggleRoleBtn { min-height: 74px; font-size: 1.22rem; }
       .copyrow button { min-width: 92px; }
     }
+  
+    /* Clear, touch-friendly timer and word-category selectors */
+    .timer-native-select { position:absolute !important; width:1px !important; height:1px !important; padding:0 !important; margin:-1px !important; overflow:hidden !important; clip:rect(0,0,0,0) !important; white-space:nowrap !important; border:0 !important; }
+    .minute-picker {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 9px;
+      margin: 12px 0 22px;
+      padding: 12px;
+      border: 1px solid #465675;
+      border-radius: 18px;
+      background: linear-gradient(145deg, #202a3d, #171f30);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 8px 22px rgba(0,0,0,.16);
+    }
+    .minute-picker button {
+      min-height: 58px !important;
+      padding: 8px 4px !important;
+      border: 1px solid #53617c;
+      background: linear-gradient(180deg, #35425d, #29344b);
+      color: #e8edf7;
+      font-size: 1.02rem !important;
+      font-weight: 750;
+      border-radius: 13px;
+      box-shadow: 0 2px 4px rgba(0,0,0,.18);
+      transition: transform .12s ease, border-color .12s ease, background .12s ease;
+    }
+    .minute-picker button:active { transform: scale(.97); }
+    .minute-picker button[aria-pressed="true"] {
+      background: linear-gradient(145deg, #6688dc, #435fa9);
+      border: 2px solid #c2d0ff;
+      color: white;
+      box-shadow: 0 0 0 3px rgba(120,150,255,.16), 0 5px 12px rgba(0,0,0,.22);
+    }
+    .minute-picker button span {
+      display: block;
+      font-size: .68rem;
+      font-weight: 600;
+      opacity: .85;
+      margin-top: 2px;
+    }
+    .selector-hint {
+      color: #aeb8cc;
+      font-size: .9rem;
+      margin: -6px 0 12px;
+    }
+    .category-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+      margin: 10px 0 16px;
+    }
+    .category-grid label {
+      min-height: 52px;
+      padding: 11px 12px;
+      border: 1px solid #53617c;
+      border-radius: 12px;
+      background: #252d40;
+      color: #e8edf7;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .12s ease, border-color .12s ease, transform .12s ease;
+      touch-action: manipulation;
+    }
+    .category-grid label:has(input:checked) {
+      background: #344b79;
+      border: 2px solid #91aaff;
+      padding: 10px 11px;
+      color: white;
+    }
+    .category-grid label:has(input[value="custom"]:checked) {
+      background: #55416f;
+      border-color: #c5a1f2;
+    }
+    .category-grid input {
+      width: 20px;
+      height: 20px;
+      accent-color: #9bb2ff;
+      flex: 0 0 auto;
+    }
+    .word-options-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; margin:12px 0; }
+    .word-options-grid button { min-height:54px !important; background:#28344b; border:1px solid #53617c; }
+    .word-options-grid button.selected { background:#315b50; border:2px solid #75d6ad; box-shadow:0 0 0 3px rgba(117,214,173,.14); }
+    .word-selection-preview { display:flex; flex-direction:column; align-items:center; gap:5px; padding:16px 14px; margin:12px 0 16px; border:1px solid #6e9e8a; border-radius:16px; background:linear-gradient(145deg,#1d3b35,#1d2e38); box-shadow:inset 0 1px 0 rgba(255,255,255,.06); text-align:center; }
+    .word-selection-preview .preview-label { color:#a8d9c4; font-size:.72rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+    .word-selection-preview strong { color:#f0fff7; font-size:clamp(1.5rem,5vw,2rem); overflow-wrap:anywhere; }
+    .word-selection-preview .preview-confirmation { color:#a9c8bb; font-size:.82rem; }
+    #customWordWrap, #hostCustomWordWrap {
+      padding: 14px;
+      margin: 12px 0;
+      border: 1px solid #a88bd1;
+      border-radius: 12px;
+      background: #30263f;
+    }
+    @media(max-width: 420px) {
+      .minute-picker { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+      .minute-picker button { min-height: 50px !important; }
+      .category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+      .category-grid label { min-height: 48px; padding: 9px; font-size: .94rem; }
+    }
+
   </style>
 </head>
 <body>
@@ -44,8 +142,9 @@
       <div class="role-counter"><label>Villagers</label><div class="counter-controls"><button type="button" class="counter-btn" data-count="villagerCount" data-step="-1">−</button><span id="villagerCountDisplay" class="counter-value">5</span><button type="button" class="counter-btn" data-count="villagerCount" data-step="1">+</button></div><input id="villagerCount" type="hidden" value="5"></div>
     </div>
     <p class="role-total">Total players: <strong id="roleTotal">8</strong></p>
-    <label for="timerMinutes">Timer duration</label><select id="timerMinutes"><option value="3">3 minutes</option><option value="4">4 minutes</option><option value="5">5 minutes</option><option value="6" selected>6 minutes</option><option value="7">7 minutes</option><option value="8">8 minutes</option><option value="10">10 minutes</option><option value="12">12 minutes</option><option value="15">15 minutes</option></select>
-    <h3>Word categories</h3>
+    <label for="timerMinutes">Timer duration</label><select id="timerMinutes" class="timer-native-select"><option value="3">3 minutes</option><option value="4">4 minutes</option><option value="5">5 minutes</option><option value="6" selected>6 minutes</option><option value="7">7 minutes</option><option value="8">8 minutes</option><option value="10">10 minutes</option><option value="12">12 minutes</option><option value="15">15 minutes</option></select><div class="minute-picker" data-minute-picker="timerMinutes" role="group" aria-label="Timer duration"></div>
+    <h3>Choose word categories</h3>
+    <p class="selector-hint">Pick one or more. The game randomly chooses from your selected categories.</p>
     <div class="category-grid">
       <label><input type="checkbox" name="wordCategory" value="animals" checked> Animals</label>
       <label><input type="checkbox" name="wordCategory" value="transit"> Transit</label>
@@ -78,11 +177,10 @@
     <div class="copyrow"><input id="gameLink" readonly aria-label="Game link"><button id="copyLinkBtn" class="secondary">Copy</button></div>
     <h3>Role distribution</h3><p id="hostRoleCounts" class="muted"></p>
     <h3>Players <span id="playerTally" class="pill">0/8</span></h3><ol id="roster" class="roster"></ol>
-    <button id="addPlayerBtn" class="secondary">Add player</button>
-    <div id="hostWordOptions" class="hidden"><h3>Choose the secret word</h3><div id="hostWordOptionsList"></div></div>
+    <div id="hostWordOptions" class="hidden"><h3>Choose the secret word</h3><div id="hostWordOptionsList" class="word-options-grid"></div><div id="hostSelectedWordPreview" class="word-selection-preview" aria-live="polite"><span class="preview-label">Selected word</span><strong id="hostSelectedWordText">Choose a word above</strong><span class="preview-confirmation">Not selected yet</span></div></div>
     <button id="startGameBtn" disabled>Start game and assign roles</button>
     <div id="hostActive" class="hidden">
-      <div id="hostSecretBox" class="secretbox"><div class="small">Mayor · Magic word</div><div id="hostSecretWord" class="word"></div></div>
+      <div class="secretbox host-secret-box"><div class="small">Mayor · Magic word</div><div id="hostSecretWord" class="word"></div></div>
       <div id="hostTimer" class="timer">06:00</div><p id="hostPhase" class="status"></p>
       <button id="tokensDoneBtn" class="secondary">All tokens have been used</button><button id="wordFoundBtn">The magic word was discovered</button>
     </div>
@@ -92,15 +190,15 @@
       <button id="newGameFromEndBtn">New game (add/remove players)</button>
     </div>
     <div id="hostNewGameSetup" class="hidden secretbox">
-      <h3>Set up the next game</h3><p class="muted">Existing players stay logged in. Remove players above or add more before preparing the next game.</p>
+      <h3>Set up the next game</h3><p class="muted">Your previous role counts, timer, and word categories are prefilled. Players stay logged in. Share the QR code or game link above to add players; use Remove beside a name to remove players. Set the role total to match the final player count.</p>
       <div class="role-count-grid">
         <div class="role-counter"><label>Seers</label><div class="counter-controls"><button type="button" class="counter-btn" data-next-count="nextSeerCount" data-step="-1">−</button><span id="nextSeerCountDisplay" class="counter-value">1</span><button type="button" class="counter-btn" data-next-count="nextSeerCount" data-step="1">+</button></div><input id="nextSeerCount" type="hidden" value="1"></div>
         <div class="role-counter"><label>Werewolves</label><div class="counter-controls"><button type="button" class="counter-btn" data-next-count="nextWerewolfCount" data-step="-1">−</button><span id="nextWerewolfCountDisplay" class="counter-value">2</span><button type="button" class="counter-btn" data-next-count="nextWerewolfCount" data-step="1">+</button></div><input id="nextWerewolfCount" type="hidden" value="2"></div>
         <div class="role-counter"><label>Villagers</label><div class="counter-controls"><button type="button" class="counter-btn" data-next-count="nextVillagerCount" data-step="-1">−</button><span id="nextVillagerCountDisplay" class="counter-value">5</span><button type="button" class="counter-btn" data-next-count="nextVillagerCount" data-step="1">+</button></div><input id="nextVillagerCount" type="hidden" value="5"></div>
       </div>
       <p class="role-total">Role total: <strong id="nextRoleTotal">8</strong></p><p id="nextCountMatch" class="counter-match"></p>
-      <label for="hostTimerMinutes">Timer duration</label><select id="hostTimerMinutes"><option value="3">3 minutes</option><option value="4">4 minutes</option><option value="5">5 minutes</option><option value="6" selected>6 minutes</option><option value="7">7 minutes</option><option value="8">8 minutes</option><option value="10">10 minutes</option><option value="12">12 minutes</option><option value="15">15 minutes</option></select>
-      <h4>Word categories</h4><div class="category-grid">
+      <label for="hostTimerMinutes">Timer duration</label><select id="hostTimerMinutes" class="timer-native-select"><option value="3">3 minutes</option><option value="4">4 minutes</option><option value="5">5 minutes</option><option value="6" selected>6 minutes</option><option value="7">7 minutes</option><option value="8">8 minutes</option><option value="10">10 minutes</option><option value="12">12 minutes</option><option value="15">15 minutes</option></select><div class="minute-picker" data-minute-picker="hostTimerMinutes" role="group" aria-label="Timer duration"></div>
+      <h4>Choose word categories</h4><p class="selector-hint">Pick one or more. The game randomly chooses from your selected categories.</p><div class="category-grid">
         <label><input type="checkbox" name="hostWordCategory" value="animals" checked> Animals</label><label><input type="checkbox" name="hostWordCategory" value="transit"> Transit</label><label><input type="checkbox" name="hostWordCategory" value="boardgames"> Board games</label><label><input type="checkbox" name="hostWordCategory" value="school"> School subjects</label><label><input type="checkbox" name="hostWordCategory" value="science"> Science</label><label><input type="checkbox" name="hostWordCategory" value="space"> Space</label><label><input type="checkbox" name="hostWordCategory" value="geography"> Geography</label><label><input type="checkbox" name="hostWordCategory" value="food"> Food</label><label><input type="checkbox" name="hostWordCategory" value="sports"> Sports</label><label><input type="checkbox" name="hostWordCategory" value="movies"> Movies & TV</label><label><input type="checkbox" name="hostWordCategory" value="music"> Music</label><label><input type="checkbox" name="hostWordCategory" value="history"> History</label><label><input type="checkbox" name="hostWordCategory" value="technology"> Technology</label><label><input type="checkbox" name="hostWordCategory" value="nature"> Nature</label><label><input type="checkbox" name="hostWordCategory" value="jobs"> Jobs</label><label><input type="checkbox" name="hostWordCategory" value="everyday"> Everyday objects</label><label><input type="checkbox" name="hostWordCategory" value="fantasy"> Fantasy</label><label><input type="checkbox" name="hostWordCategory" value="custom"> My own word</label>
       </div>
       <div id="hostCustomWordWrap" class="hidden"><label for="hostCustomWord">Your custom word</label><input id="hostCustomWord" maxlength="80" placeholder="Enter a secret word"></div>
@@ -113,6 +211,6 @@
   <section id="errorPanel" class="panel hidden"><h2>Something went wrong</h2><p id="errorText"></p><button id="backHomeBtn" class="secondary">Back to home</button></section>
   <footer>Werewords · Private roles · Random assignment</footer>
 </main>
-<script type="module" src="app.js?v=20261125-removed-player-audio-no-voting-1"></script>
+<script type="module" src="app.js?v=20261124-next-setup-fix-2"></script>
 </body>
 </html>
